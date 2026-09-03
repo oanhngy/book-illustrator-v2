@@ -61,12 +61,11 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 **Cần học:** Gemini API làm được gì — structured JSON output, image generation, nối ngữ cảnh giữa các lượt gọi.
 
 **Việc cần làm:**
-- [ ] Đọc kỹ `docs/gradion-assessment-intern-software-engineer.md`, đánh dấu mọi câu chứa "must" / "required" / "hard requirement".
-- [ ] Tự chạy notebook Google *Illustrate a book: The Wind in the Willows* (bước 1–5) trên Colab. Bắt buộc — không đoán pipeline.
-- [ ] **Tạo và viết `docs/01-requirements.md`** — chuyển đề bài thành checklist có mã: FR-xx (chức năng), NFR-xx (phi chức năng), và một mục "ngoài phạm vi".
-- [ ] **Tạo và viết `docs/02-pipeline.md`** — với mỗi bước trong 5 bước: gọi endpoint nào, gửi gì, nhận gì, ngữ cảnh nối sang bước sau bằng cơ chế nào, cap bao nhiêu. Kèm prompt của từng bước.
-- [ ] Nếu còn giữ `app-demo.html` của đề: click qua từng màn hình, ghi lại các state nhìn thấy vào `01-requirements.md`.
-- [ ] Tạo `docs/learning-log.md` với entry đầu tiên về Gemini API.
+- [x] Đọc kỹ `docs/gradion-assessment-intern-software-engineer.md`, đánh dấu mọi câu chứa "must" / "required" / "hard requirement".
+- [x] Tự chạy notebook Google *Illustrate a book: The Wind in the Willows* (bước 1–5) trên Colab. Bắt buộc — không đoán pipeline.
+- [x] **Tạo và viết `docs/01-requirements.md`** — chuyển đề bài thành checklist có mã: FR-xx (chức năng), NFR-xx (phi chức năng), và một mục "ngoài phạm vi".
+- [x] **Tạo và viết `docs/02-pipeline.md`** — với mỗi bước trong 5 bước: gọi endpoint nào, gửi gì, nhận gì, ngữ cảnh nối sang bước sau bằng cơ chế nào, cap bao nhiêu. Kèm prompt của từng bước.
+- [x] Nếu còn giữ `app-demo.html` của đề: click qua từng màn hình, ghi lại các state nhìn thấy vào `01-requirements.md`.
 
 **Chưa được làm:** chưa chọn kiến trúc, chưa tạo project .NET.
 

@@ -40,7 +40,3 @@
 ## Chỗ Claude bắt lỗi tôi
 
 - [ ] …
-
-## Nếu có thêm một ngày
-
-☐ …
