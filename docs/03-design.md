@@ -1,155 +1,154 @@
 # 03 — Design
-
-> Viết ở Phase 1, sau khi đã có `01-requirements.md` và `02-pipeline.md`.
-> Ba phần A/B/C nằm chung một file vì chúng thay đổi cùng lúc: đổi cách lưu tiến độ là đổi luôn response của API.
-> Mọi lựa chọn phải truy ngược về một mã FR/NFR.
-
 ---
 
 # A. Kiến trúc
-
 ## A1. Các lực ép từ requirements
 
 Kiến trúc không chọn theo sở thích, mà bị ép bởi ràng buộc. Liệt kê trước, rồi mới chọn.
 
 | Lực ép | Từ | Ép kiến trúc theo hướng nào |
 |---|---|---|
-| Một lời gọi mất 10–30s+ | FR-25 | HTTP request **không được** đợi tới lúc xong → chạy nền, trả về ngay |
+| Một lời gọi mất 10–30s+ | docs/pipeline | HTTP request **không được** đợi tới lúc xong → chạy nền, trả về ngay |
 | Phải resume sau restart | FR-23 | Toàn bộ state phải **nằm trên disk**, không chỉ trong RAM |
-| Không được gọi trùng | FR-24 | Phải có bước "claim" nguyên tử trước khi gọi Gemini |
+| Không được gọi trùng | FR-24, FR-22 | Phải có bước "claim" nguyên tử trước khi gọi Gemini |
 | Storage là file phẳng | NFR-01 | Không `UPDATE ... WHERE`, không transaction → tự lo bằng lock trong process |
 | Chỉ gửi text sách một lần | FR-29 | Phải lưu con trỏ ngữ cảnh vào state của project |
 | Right-sized | NFR-06 | Không Repository interface, không MediatR, không CQRS |
-| ☐ … | | |
+| Đọc được toàn văn sách bất kỳ lúc nào | FR-14 | bookText phải sớng bền, tách khỏi state hay đổi --> xem B3 |
+| Ảnh phải hiện từng tấm khi sinh | FR-32 | PipelineService phải ghi xuống Store sau mỗi ảnh (nhiều lần UpdateAsync) |
+| Bước treo phải có đường thoát cho user, không sửa tay | FR-27 | Cần lưu runningSince để tính đã chạy bao lâu, cần cơ chế/endpoint reset (C6) |
+| Ảnh + text sách phục vụ qua API của mình, không S3/CDN | NFR-02 | Bắt buộc có endpoint tự phục vụ file nhị phân trực tiếp từ đĩa, không redirect dịch vụ ngoài | 
 
-## A2. Sơ đồ tổng thể
+## A2. Sơ đồ tổng thể (Component Diagram)
 
 ```
-┌─────────────────┐        HTTP/JSON        ┌──────────────────────────────┐
-│  client (React) │ ──────────────────────▶ │  server (ASP.NET Core)       │
-│                 │ ◀────────────────────── │                              │
-│  polling 2s     │                         │  Endpoints                   │
-└─────────────────┘                         │        │                     │
-                                            │        ▼                     │
-                                            │  PipelineService             │
-                                            │     │            │           │
-                                            │     ▼            ▼           │
-                                            │  ProjectStore  IGeminiClient │
-                                            │     │              │         │
-                                            └─────┼──────────────┼─────────┘
-                                                  ▼              ▼
-                                            data/*.json     Gemini REST
-                                            data/images/    (hoặc Fake)
+┌─────────────────┐        HTTP/JSON        ┌────────────────────────────────────────────────────────────── -┐
+│  client (React) │ ──────────────────────▶ │  server (ASP.NET Core)                                         │
+│                 │ ◀────────────────────── │                                                                │
+│  polling 2s     │                         │           -------------Endpoints - - - - - - - - -             │
+└─────────────────┘                         │           │                 │                     ┊            │
+                                            │ (ghi item)│         (claim) │                     ┊ (đọc/poll, │
+                                            │           ▼                 ▼                     ┊  gọi thẳng │
+                                            │      Channel<T>       PipelineService             ┊  Store,    │
+                                            │           ▲               │       │               ┊  không qua │
+                                            │     (đọc) │               │       ▼               ┊  Pipeline) │
+                                            │           │               │  IGeminiClient        ┊            │
+                                            │  ┌────────┴─────────-┐    │       │               ┊            │
+                                            │  │ BackgroundService │    │       │               ┊            │
+                                            │  │ (tự tạo scope,    │────┘       │               ┊            │
+                                            │  │  gọi RunStepAsync)│            │               ┊            │
+                                            │  └───────────────────┘            │               ┊            │
+                                            │           │                       │               ┊            │
+                                            │           ▼                       │               ▼            │
+                                            │      ProjectStore ◄───────────────┴───────────────┘            │
+                                            │           │                       │                            │
+                                            └───────────┼───────────────────────┼────────────────────────--──┘
+                                                        ▼                       ▼
+                                                   data/*.json               Gemini REST
+                                                   data/images/              (hoặc Fake)
 ```
 
-## A3. Cấu trúc project — DECISION
+## A3. Cấu trúc project
+Một project chia theo thư mục
+Quy tắc Dependency: Endpoint --> Pipeline --> {Storage, Gemini} cho thao tác ghi/orchestration (claim, run step). Storage không được biết khái niệm nghiệp vụ pipeline (only CRUD qua Get/Save/Update(mutate)), việc đọc (GET) được gọi thẳng Store không vi phạm nguyên tắc
+Trade-offs ở `DECISIONS.md` ##1
 
-| Cách | Được | Mất | Khi nào chọn |
-|---|---|---|---|
-| A. Một project `server`, chia theo thư mục (`Storage/`, `Gemini/`, `Pipeline/`) | Ít ma sát, dễ nhìn toàn cảnh | Không có ranh giới cứng, dependency dễ chảy ngược | Scope nhỏ, một người làm |
-| B. Nhiều project `Api / Application / Infrastructure` | Ranh giới do compiler ép | Nhiều file, nhiều mapping, quá nặng cho ~15 endpoint | Team lớn, domain phức tạp |
-
-**Chốt:** ☐ A ☐ B — lý do: ☐ …
-
-> Tôi đã dùng layered + Repository ở dự án Bookstore. Ở đây `ProjectStore` **chính là** repository rồi — thêm một interface nữa lên trên nó là abstraction rỗng.
-
-## A4. Chạy việc dài 10–30s — DECISION
-
-| Cách | Được | Mất |
-|---|---|---|
-| A. `Task.Run` fire-and-forget + tự tạo DI scope | Ít code nhất | Không hàng đợi, shutdown là mất việc, khó quan sát |
-| B. `BackgroundService` + `Channel<T>` | Có hàng đợi, shutdown lịch sự, giới hạn được số việc song song | Thêm ~50 dòng và một khái niệm mới |
-
-Cả hai đều thoả FR-23 **nếu** state được persist trước khi chạy — mất việc thì project ở trạng thái "running" và cơ chế stuck (FR-27) sẽ cứu.
-
-**Chốt:** ☐ A ☐ B — lý do: ☐ …
+## A4. Chạy việc dài 10–30s
+Luồng: Nhận request --> Ghi nhận state --> Trả HTTP 202 Accepted ASAP --> Chạy việc gọi Gemini ở chế độ nền
+BackgroundService + Channel<T>= nền tảng chuẩn server-sice --> Học thêm trong Phase 6
+Trade-offs ở `DECISIONS.md` ##5
 
 ## A5. Sequence "user bấm Run step N"
 
 ```
-Client                 API                    Store                 Pipeline            Gemini
-  │  POST .../steps/2/run │                     │                      │                  │
-  ├──────────────────────▶│                     │                      │                  │
-  │                       │ claim(projectId, 2) │                      │                  │
-  │                       ├────────────────────▶│  ┌─ lock ─────────┐  │                  │
-  │                       │                     │  │ đọc project    │  │                  │
-  │                       │                     │  │ check hợp lệ?  │  │                  │
-  │                       │                     │  │ set running=2  │  │                  │
-  │                       │                     │  │ ghi atomic     │  │                  │
-  │                       │◀────────────────────┤  └────────────────┘  │                  │
-  │      202 / 409        │                     │                      │                  │
-  │◀──────────────────────┤                     │                      │                  │
-  │                       │  chạy nền ──────────┼─────────────────────▶│  gọi API         │
-  │  GET /projects/{id}   │                     │                      ├─────────────────▶│
-  ├──────────────────────▶│  (polling mỗi 2s)   │                      │◀─────────────────┤
-  │◀──────────────────────┤                     │  lưu kết quả + xong  │                  │
+Client           API            Channel    BackgroundService     Pipeline          Store           Gemini
+  |               |                |               |                 |               |               |
+  | 1. POST .../steps/2/run        |               |                 |               |               |
+  |-------------->|                |               |                 |               |               |
+  |               | 2. ClaimStepAsync(id, 2)       |                 |               |               |
+  |               |------------------------------------------------->|               |               |
+  |               |                |               |                 | 3. UpdateAsync|               |
+  |               |                |               |                 |-------------->|               |
+  |               |                |               |                 |               | ┌─ lock ─────┐|
+  |               |                |               |                 |               | │ đọc project│|
+  |               |                |               |                 |               | │ check      │|
+  |               |                |               |                 |               | │ running=2  │|
+  |               |                |               |                 |               | │ ghi atomic │|
+  |               |                |               |                 |               | └────────────┘|
+  |               |                |               |                 | 4. OK         |               |
+  |               |                |               |                 |<--------------|               |
+  |               | 5. OK (claimed)|               |                 |               |               |
+  |               |<-------------------------------------------------|               |               |
+  |               |                |               |                 |               |               |
+  |               | 6. Write(id, 2)|               |                 |               |               |
+  |               |--------------->|               |                 |               |               |
+  | 7. 202 Accepted                |               |                 |               |               |
+  |<--------------|                |               |                 |               |               |
+=============================================================================================================
+                                             [ LUỒNG NGẦM ]
+=============================================================================================================
+  |               |                |               |                 |               |               |
+  |               |                | 8. Read() liên tục từ khi app start             |               |
+  |               |                |<--------------|                 |               |               |
+  |               |                |               |                 |               |               |
+  |               |                |   [Tự tạo IServiceScopeFactory.CreateScope()]   |               |
+  |               |                |   [Resolve PipelineService từ Scope mới]        |               |
+  |               |                |               |                 |               |               |
+  |               |                |               9. RunStepAsync(id, 2)            |               |
+  |               |                |               |---------------->|               |               |
+  |               |                |               |                 | 10. Gọi API   |               |
+  |               |                |               |                 |------------------------------>|
+  |               |                |               |                 | 11. Trả KQ    |               |
+  |               |                |               |                 |<------------------------------|
+  |               |                |               |                 | 12. Lưu, running=null (atomic)|
+  |               |                |               |                 |-------------->|               |
+-------------------------------------------------------------------------------------------------------------
+                                            [ LUỒNG POLLING ]
+-------------------------------------------------------------------------------------------------------------
+  |               |                |               |                 |               |               |
+  | GET /projects/{id}             |               |                 |               |               |
+  |-------------->|                |               |                 |               |               |
+  |               | đọc project    |               |                 |               |               |
+  |               |----------------------------------------------------------------->|               |
+  |               | trả state      |               |                 |               |               |
+  |               |<-----------------------------------------------------------------|               |
+  | 200 OK        |                |               |                 |               |               |
+  |<--------------|                |               |                 |               |               |
 ```
 
 **Điểm mấu chốt:** khối `lock` thay thế cho câu `UPDATE ... WHERE completedSteps = N-1 AND runningStep IS NULL` mà database sẽ làm giùm. Không có nó, hai request đồng thời cùng đọc thấy "rảnh" và cùng gọi Gemini → vi phạm FR-24.
 
 ## A6. Giả định đã chấp nhận
-
-- [ ] Chạy **một process duy nhất**. Lock trong bộ nhớ không bảo vệ được nhiều instance. Ghi rõ trong README.
-- [ ] Không có auth thật — email là danh tính.
-- [ ] Không có migration cho JSON: đổi schema là phải xử lý file cũ bằng tay hoặc xoá `data/`.
-- [ ] ☐ …
+- Chạy 1 process duy nhất. Lock trong bộ nhớ không bảo vệ được nhiều instance, có trong README
+- KHông auth thật, email là danh tính
+- Không migration cho JSON: đổi schema là phải xử lý file cũ manual hoặc xóa data/ --> Chấp nhận cho dự án cá nhân
+- Channel<T> chỉ tồn tại trong bộ nhớ, không bền. Nếu server restart giữa lúc item còn trong hàng đợi (chưa xuống BackgroundService), item đó sẽ mất, vì runningStep/runningSince đã ghi xuống disk trước enqueue (xem A5 bước 2-6), cơ chế phát hiện bước treo được cứu khi user thấy bước "đang chạy" quá lâu và tự force retry
+- KHông hỗ trợ đổi email sau khi tạo tài khoản, out of scope của requirements
+- Context phía Gemini có TTL 48h, hết hạn phải re-construct, chi tiết docs/02-pipeline.md phần 2
 
 ---
 
 # B. Data model
-
-## B1. Database từng làm giùm những gì?
-
-Liệt kê cho rõ mình đang mất gì khi bỏ database:
-
-| Database cho | JSON file có? | Tôi phải tự làm gì |
-|---|---|---|
-| Ghi nguyên tử | ✗ | Ghi file tạm rồi rename |
-| `UPDATE ... WHERE` (compare-and-set) | ✗ | Đọc-kiểm-tra-ghi bên trong một lock |
-| Transaction nhiều bảng | ✗ | Thiết kế sao cho mỗi thao tác chỉ chạm **một** file |
-| Query / index | ✗ | Quét thư mục (chấp nhận được ở scope này) |
-| Kiểu dữ liệu, ràng buộc | ✗ | Validate trong code |
-| Concurrency nhiều process | ✗ | **Không có** → chấp nhận giả định một process |
+## B1. Không xài Database mất gì - Cần làm?
+- Ghi nguyên tử --> Temp file then rename
+- UPDATE...WHERE --> Read-Check-Write trong 1 lock
+- Transaction nhiều bảng --> Thiết kế mỗi thao tác chỉ chạm 1 file
+- Query/Index --> Quét thư mục (chấp nhận ở scope này)
+- Data type, constraint --> Validate trong code
+- Concurrency nhiều process --> Chấp nhận giả định 1 process
 
 ## B2. Layout thư mục — DECISION
+Mô hình=Data model phẳng
+userKey= slug+Hash SHA-256 (8 ký tự đầu)
+--> project.json bắt buộc tự mang userEmail vì path không còn làm việc đó thay (xem B3)
+Trade-offs ở `DECISIONS.md` ##2
 
-**A — phẳng theo loại:**
-```
-data/
-  users/<userKey>.json
-  projects/<projectId>.json
-  images/<projectId>/3-0.png
-```
-
-**B — lồng theo user:**
-```
-data/
-  users/<userKey>/
-    user.json
-    projects/<projectId>/
-      project.json
-      book.txt
-      images/3-0.png
-```
-
-| | A | B |
-|---|---|---|
-| Liệt kê project của user | quét toàn bộ | quét một thư mục |
-| Xoá user | phải lọc | `Directory.Delete` |
-| Đổi email | không ảnh hưởng đường dẫn | phải đổi tên thư mục |
-| Độ phức tạp đường dẫn | thấp | cao hơn |
-
-**Chốt:** ☐ A ☐ B
-
-**`userKey` sinh từ email bằng cách nào?** Email chứa `@`, `.`, có thể chứa `..` hoặc `/` nếu ai đó cố tình → **path traversal**.
-☐ hash SHA-256 ☐ slug + whitelist ký tự ☐ sinh GUID riêng làm userId
-
-## B3. Schema `project.json` (nháp)
+## B3. Schema `project.json`
 
 ```json
 {
   "id": "9c1f...",
-  "userEmail": "oanh@example.com",
+  "userEmail": "oanh@example.com", //bắt buộc
   "title": "The Wind in the Willows",
   "createdAt": "2026-08-27T04:00:00Z",
 
@@ -168,30 +167,16 @@ data/
 }
 ```
 
-**`bookText` để trong file này hay tách ra `book.txt`?** Sách có thể vài trăm KB, mà mỗi lần cập nhật tiến độ là ghi lại **toàn bộ** file. Tách ra thì mỗi lần ghi nhẹ hơn nhiều.
-**Chốt:** ☐ trong JSON ☐ tách `book.txt`
+**bookText để trog file hay tách?**
+--> Tách riêng vì field trong đó thay đổi liên tục, để chung thì phải chép lại toàn bộ nội dung còn lại dù không thay đổi nhiều lần --> tốn kém + write amplification không cần thiết 
+Trade-off: khi trả full detail (C4, cần cả bookText) thì server phải đọc 2 file thay vì 1, nhưng chi phí READ rẻ hơn WRITE, + tần suất thấp --> đáng đánh đổi
 
-## B4. Mô hình hoá tiến độ — DECISION
-
-| Cách | Được | Mất |
-|---|---|---|
-| A. `completedSteps: int` + `runningStep: int?` | Đơn giản; check thứ tự chỉ là `completedSteps == step - 1` | Giả định pipeline tuyến tính; không lưu lịch sử từng lần thử |
-| B. Mảng 5 phần tử `[{step, status, startedAt, error}]` | Diễn đạt nhiều hơn; mở đường cho retry history | Nhiều state hơn = nhiều chỗ sai hơn; phải tự giữ bất biến "không có lỗ hổng giữa các bước done" |
-
-**Chốt:** ☐ A ☐ B — bắt buộc ghi vào `DECISIONS.md`.
+## B4. Mô hình hoá tiến độ
+completedSteps: int + runningStep: int?
+Trade-offs ở `DECISIONS.md` ##3
 
 ## B5. Atomic write
-
-Ghi thẳng đè lên file cũ là sai:
-
-```csharp
-// SAI
-await File.WriteAllTextAsync(path, json);
-```
-
-`WriteAllText` **truncate file về 0 byte trước**, rồi mới ghi. App chết ở giữa → file còn lại là JSON cụt → mất trắng project đó.
-
-Đúng:
+Không ghi thẳng đè lên file cũ là sai, cách đúng:
 ```
 1. ghi toàn bộ nội dung vào path + ".tmp"
 2. flush xuống đĩa
@@ -201,48 +186,18 @@ await File.WriteAllTextAsync(path, json);
 Sau bước 3, file hoặc là bản cũ nguyên vẹn, hoặc là bản mới nguyên vẹn. Không bao giờ nửa vời.
 
 ## B6. Lock — thay thế cho `UPDATE ... WHERE`
-
-Đoạn nguy hiểm là **read → check → write**:
-
-```
-Request 1: đọc (runningStep = null) ─┐
-Request 2: đọc (runningStep = null) ─┤  cả hai đều thấy "rảnh"
-Request 1: ghi runningStep = 2       │
-Request 2: ghi runningStep = 2       ┘  → gọi Gemini 2 lần → vi phạm FR-24
-```
-
-Cả ba thao tác phải nằm trong cùng một vùng loại trừ lẫn nhau:
-
-```csharp
-// Ý tưởng — chưa phải code cuối
-private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> _locks = new();
-
-public async Task<bool> UpdateAsync(Guid id, Func<Project, bool> mutate)
-{
-    var gate = _locks.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
-    await gate.WaitAsync();
-    try
-    {
-        var project = await ReadAsync(id);      // đọc
-        if (!mutate(project)) return false;      // kiểm tra + sửa; false = không hợp lệ
-        await WriteAtomicAsync(project);         // ghi
-        return true;
-    }
-    finally { gate.Release(); }
-}
-```
-
-- **Vì sao `SemaphoreSlim` chứ không `lock`?** `lock` (Monitor) gắn với **thread**; `await` có thể trả về trên thread khác → release nhầm thread. Trình biên dịch C# không cho `await` bên trong `lock`.
-- **Vì sao khoá theo project chứ không toàn cục?** Hai user chạy hai project khác nhau không có lý do phải chờ nhau. Cái giá: dictionary chỉ lớn dần, không bao giờ dọn — chấp nhận ở scope này, nhưng phải **biết** là mình đang chấp nhận.
-- **Chốt:** ☐ theo project ☐ toàn cục
+Khóa theo từng project ConcurrentDictionary<Guid, SemaphoreSlim>
+- Mọi thao tác cập nhật tiến độ (Read - Mutate - Write) bắt buộc nằm trong khối SemaphoreSlim.WaitAsync() tương ứng từng project
+- Thao tác ghi đĩa bắt bước như B5
+Trade-offs ở `DECISIONS.md` ##6
 
 ## B7. Cạm bẫy phải nhớ
 
-- [ ] `ProjectStore` phải là **singleton** (hoặc dictionary `static`). Nếu scoped, mỗi request có dictionary riêng → lock vô dụng.
-- [ ] Lưu ảnh: ghi **file ảnh trước**, cập nhật JSON sau. Ngược lại thì JSON trỏ tới file không tồn tại.
-- [ ] `GET /api/images/{id}`: đường dẫn chỉ lấy từ JSON, **không** ghép từ input user.
-- [ ] `DateTime` luôn UTC, serialize ISO-8601 có `Z`.
-- [ ] `JsonSerializerOptions` phải `static readonly` — tạo mới mỗi lần gọi rất chậm.
+- [x] `ProjectStore` phải là **singleton** (hoặc dictionary `static`). Nếu scoped, mỗi request có dictionary riêng → lock vô dụng.
+- [x] Lưu ảnh: ghi **file ảnh trước**, cập nhật JSON sau. Ngược lại thì JSON trỏ tới file không tồn tại.
+- [x] `GET /api/images/{id}`: đường dẫn chỉ lấy từ JSON, **không** ghép từ input user.
+- [x] `DateTime` luôn UTC, serialize ISO-8601 có `Z`--> múi giờ chuẩn để in case server Mỹ, React ở Nhật, BE Việt thì vẫn giống nhau
+- [x] `JsonSerializerOptions` phải `static readonly` — tạo mới mỗi lần gọi rất chậm.
 
 ## B8. Test bắt buộc cho tầng này
 
@@ -254,44 +209,35 @@ public async Task<bool> UpdateAsync(Guid id, Func<Project, bool> mutate)
 ---
 
 # C. API contract
-
 Base URL dev: `http://localhost:5050`
 
-## C0. Nhận diện user — DECISION
-
-| Cách | Được | Mất |
-|---|---|---|
-| A. Header `X-User-Email` | Đơn giản nhất, curl dễ | Ai cũng giả mạo được — **không phải bảo mật** |
-| B. Cookie phiên ký | Giống thật hơn | Thêm hạ tầng cho thứ đề nói rõ là không cần |
-
-**Chốt:** ☐ A ☐ B. Nếu A → ghi rõ trong README rằng đây không phải authentication.
+## C0. Nhận diện user
+Header `X-User-Email`
+Trade-offs ở `DECISIONS.md` ##4
 
 ## C1. `POST /api/auth`
-
 ```
 → { "email": "oanh@example.com", "name": "Oanh" }
 ← 200 { "userId": "…", "email": "…", "name": "…" }
 ```
 - Email chuẩn hoá: trim + lowercase.
-- Email đã có → trả về. Có cập nhật tên không? ☐ có ☐ không
+- Email đã có → trả về. **Cập nhật tên, POST/api/auth kiêm luôn sửa tên**, không thêm endpoint mới, thỏa NFR-06 (tái sdung thay vì xây thêm)
 - `400` nếu thiếu email/tên hoặc email không hợp lệ.
 
 ## C2. `POST /api/projects`
-
 ```
 → { "title": "…", "bookText": "…" }
 ← 201 { project summary }
 ```
-- Upload `.txt`: FE đọc file thành string, hay gửi `multipart/form-data`? ☐ FE đọc ☐ multipart
-- `400` nếu title rỗng, bookText rỗng, hoặc vượt giới hạn (bao nhiêu? ☐ …).
+- Upload `.txt`: **FE đọc file thành string**. File .txt chỉ khoảng 10% context window, không cần multipart (also không phát huy được lợi thế)
+- `400` nếu title rỗng, bookText rỗng, hoặc vượt giới hạn 500.000 ký tự: Giới hạn tính theo số ký tự, ép ở both FE và server, chọn trần 500.000 ký tự
 
 ## C3. `GET /api/projects`
 
 ```
 ← 200 [ { "id","title","createdAt","completedSteps","runningStep","failedStep" } ]   // mới nhất trước
 ```
-Trạng thái hiển thị ở UI: server trả sẵn một trường `status`, hay client tự tính? ☐ server ☐ client
-(Server tính thì UI không lệch logic; client tính thì payload gọn hơn.)
+Trạng thái hiển thị ở UI: server trả sẵn một trường `status`, hay client tự tính? **Server tính**, BE định nghĩa rõ enum trạng thái và maintain, logic running/failed/completed chỉ viết 1 chỗ duy nhất(FR-30), payload nặng hơn đúng 1 field có giá ít hơn so với việc trùng lặp logic
 
 ## C4. `GET /api/projects/{id}`
 
@@ -314,7 +260,7 @@ Body (chỉ dùng ở bước 1): `{ "style": "…" }` — tuỳ chọn (FR-31).
 Không trả kết quả — client polling `GET /api/projects/{id}`.
 
 ## C6. Bước treo (FR-27)
-
+**PHase 8**
 **DECISION:** ☐ endpoint riêng `POST .../steps/{step}/reset` ☐ `run` tự cướp quyền khi quá ngưỡng ☐ cả hai
 Ngưỡng bao nhiêu phút? ☐ … (ảnh mất 30s+, đừng đặt quá ngắn)
 
@@ -324,10 +270,8 @@ Trả file nhị phân kèm đúng `Content-Type`. `404` nếu không có id ho�
 **Bắt buộc:** đường dẫn chỉ lấy từ metadata trong JSON.
 
 ## C8. Định dạng lỗi
-
-Chốt một dạng duy nhất rồi dùng nhất quán toàn API:
+1 dạng duy nhất rồi dùng nhất quán toàn API:
 ```json
 { "error": "STEP_NOT_AVAILABLE", "message": "Step 3 cannot start before step 2 completes." }
 ```
-`error` cho máy đọc (client đổi UI theo mã này), `message` cho người đọc.
-**Chốt:** ☐ dạng này ☐ chỉ trả chuỗi ☐ ProblemDetails (RFC 7807)
+**Chốt:** như trên=**Custome {error, message}, đúng mục tiêu machine-readable + human-readable, phù hợp right-sizing và ít code

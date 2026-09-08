@@ -82,20 +82,20 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 **Cần học:** Minimal API vs Controller; transaction script vs layered; khi nào Repository pattern là thừa.
 
 **Việc cần làm:**
-- [ ] Liệt kê các **lực ép** từ requirements: gọi AI mất 10–30s, phải resume được, phải chống gọi trùng, storage là file phẳng. Với mỗi lực ép → nó ép kiến trúc theo hướng nào?
-- [ ] **Tạo và viết `docs/03-design.md`** với ba phần:
+- [x] Liệt kê các **lực ép** từ requirements: gọi AI mất 10–30s, phải resume được, phải chống gọi trùng, storage là file phẳng. Với mỗi lực ép → nó ép kiến trúc theo hướng nào?
+- [x] **Tạo và viết `docs/03-design.md`** với ba phần:
   - **A. Kiến trúc** — sơ đồ tổng thể, cấu trúc thư mục, chỗ chạy việc nền, sequence "user bấm Run step N".
   - **B. Data model** — layout thư mục `data/`, schema `project.json`, cách mô hình hoá tiến độ, atomic write, lock.
   - **C. API contract** — danh sách endpoint, request/response, status code (đặc biệt: khi nào trả `409`).
-- [ ] Ghi các quyết định vào `DECISIONS.md`.
+- [x] Ghi các quyết định vào `DECISIONS.md`.
 
 **Decision phải chốt ở phase này:**
-1. Layering: gộp trong `Program.cs` hay tách `Api / Application / Infrastructure`?
-2. Layout file JSON trên disk — phẳng theo loại, hay lồng theo user?
-3. Mô hình hoá tiến độ: `completedSteps` (int) + `runningStep` hay mảng trạng thái 5 phần tử?
-4. Chống ghi đè đồng thời bằng cách nào?
-5. Chạy bước dài 10–30s: `Task.Run` fire-and-forget hay `BackgroundService` + hàng đợi?
-6. Nhận diện user: header `X-User-Email` hay cookie phiên?
+[x] 1. Layering: gộp trong `Program.cs` hay tách `Api / Application / Infrastructure`?
+[x] 2. Layout file JSON trên disk — phẳng theo loại, hay lồng theo user?
+[x] 3. Mô hình hoá tiến độ: `completedSteps` (int) + `runningStep` hay mảng trạng thái 5 phần tử?
+[x] 4. Chống ghi đè đồng thời bằng cách nào?
+[x] 5. Chạy bước dài 10–30s: `Task.Run` fire-and-forget hay `BackgroundService` + hàng đợi?
+[x] 6. Nhận diện user: header `X-User-Email` hay cookie phiên?
 
 **DoD:** vẽ được sequence "user bấm Run step 2" từ click → HTTP → file trên disk → polling → UI, không thiếu mắt xích nào.
 
@@ -168,7 +168,7 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 
 ## Phase 5 — Tầng Gemini + fake client
 
-> Làm fake **trước** khi làm thật (tránh đối token)
+> Làm fake **trước** khi làm thật (tránh đốt token)
 
 **Cần học:** `HttpClient` / `IHttpClientFactory`, typed client; đọc REST doc của Gemini; structured output bằng JSON schema; nối ngữ cảnh giữa các lượt gọi.
 

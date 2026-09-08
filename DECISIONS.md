@@ -1,39 +1,160 @@
-# DECISIONS.md
-
-> Chỉ ghi **quyết định**, không ghi nhật ký công việc — phần đó git history lo.
-> Mỗi mục: ai đề xuất, ai phản đối, chốt ở đâu, **cái giá đã chấp nhận**.
-> Cái giá là phần quan trọng nhất. Một quyết định không có cái giá nào là một quyết định chưa được suy nghĩ.
-
----
-
-## Mẫu
-
-```
-## <Tên quyết định>
-
-**Bối cảnh:** vì sao phải quyết chuyện này, ràng buộc nào ép.
-**Các lựa chọn:** A / B / C — mỗi cái được gì.
-**Chốt:** …
-**Cái giá chấp nhận:** …
-**Sẽ xem lại khi:** điều kiện nào làm quyết định này sai đi.
-```
+## DECISIONS
+## 1. Cấu trúc dự án - Layering
+**Người đề xuất** PLAN.md
+**Bối cảnh** NFR-06 Right-sizing. Dự án scope nhỏ, domain logic đơn giản
+**Options**
+| Cách | Được | Mất | Áp dụng |
+| --- | --- | --- | --- |
+| A. Tách project Api/App/Infras | Chia file rõ, ranh giới do compiler ép | Boilerplate, nặng cho ~ 15 endpoints | Domain phức tạp, team lớn |
+| B. Một project chia thư mục | Gọn, dễ nhìn toàn cảnh | Không có ranh giới cứng, nguy cơ dependency chảy ngược | Scope nhỏ, 1 người |
+**Chốt** B
+**Trade-offs**
+    - Nguy cơ Circular dependency --> solve=Single Responsibility: Storage/ không được biết khái niệm "step/run/pipeline". Signature các hàm trong ProjectStore chỉ nói ngôn ngữ CRUD (Get, Save, Update(mutate)), không nói ngôn ngữ nghiệp vụ pipeline, ngoài ra grep/NetArchTest (cơ chế phát hiện) thực hiện ở các Phase cuối (khi có đủ kiến trúc)
+    - Tránh Program.cs lộn xộn khi nhiều endpoint bằng Extension Method
+**Xem lại khi** khi domain logic pipeline phình to (nhiều step phức tạp cần cô lập)
 
 ---
+## 2. Data model - Layout thư mục
+## 2.1 Mô hình=Data model phẳng
+**Người đề xuất** PLAN.md
+**Bối cảnh** ảnh hưởng trực tiếp ProjectStore/JsonStore 
+**Options**
+| Vấn đề | Phẳng | Lồng theo User |
+| --- | --- | --- |
+| list all project của 1 user | mỗi loại data có thự mục riêng, cần quét toàn bộ projects/ | mỗi user có folder riêng, tìm project theo user đơn giản |
+| chặn user A đọc project user B | tự so userEmail trong JSON với người gọi mỗi lần | về nguyên tắc đã tách, cần thêm bước double check |
+| delete dữ liệu 1 user | lọc + xóa từng file rải rác | Directory.Delete(recursive:true) |
+| đổi email của user | không ảnh hưởng đường dẫn project | đổi tên tất cả thư mục liên quan |
+| độ phức tạp | thấp, mỗi loại 1 hàm build path cố định | cao hơn, path project phụ thuộc path user, phải build path lồng nhau |
+| ảnh | tách theo projectId | nằm sâu trong users/ |
+**Chốt** Phẳng
+**Trade-offs**
+    - hy sinh tốc độ hàm list(liệt kê) đổi lấy các lệnh chạy ngầm và lệnh Lock thường chỉ nhận projectId, dù phải quét toàn bộ projects/ nhưng dự án scope nhỏ --> chấp nhận được, phù hợp right-sizing
+    - project.json bắt buộc tự mang userEmail vì path không còn làm việc đó thay
+**Xem lại khi** Dự án phức tạp, việc liệt kê tăng đáng kể
 
+## 2.2 userKey= slug+Hash SHA-256 (8 ký tự đầu)
+**Bối cảnh** đi kèm với data model
+**Options**
+| Cách | Được | Mất |
+| --- | --- | --- |
+| SHA-256 | an toàn tuyệt đối, không cần validate ký tự | tên thư mục vô nghĩa khi debug, phải tra ngược |
+| slug+whitelist| đọc được bằng mắt khi debug | tự viết hàm lọc ký tự, dễ sót edge case hoặc email khác nhau nhưng trùng slug |
+| GUID riêng làm userId | an toàn, độc lập với email | cần thêm 1 tầng tra cứu email-GUID trước khi tìm path |
+**Chốt** Slug + Hash SHA-256 (8 ký tự đầu)
+**Trade-offs**
+    - Hiểu được nội dung = slug
+    - có Hash 8 ký tự --> ~ 4 tỷ giá trị đủ chống collision
+    - Đổi việc tên dài hơn thay cho việc thêm 1 tầng tra cứu + collision
+**Xem lại khi** Số lượng tăng nhiều
+
+---
+## 3. Mô hình pipeline
+**Người đề xuất** PLAN.md
+**Bối cảnh** quyết định lõi, mọi logic Phase 6-8 dựa vào state này
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. `completedSteps: int` + `runningStep: int?` | Đơn giản; check thứ tự chỉ là `completedSteps == step - 1` | Giả định pipeline tuyến tính; không lưu lịch sử từng lần thử |
+| B. Mảng 5 phần tử `[{step, status, startedAt, error}]` | Diễn đạt nhiều hơn; mở đường cho retry history | Nhiều state hơn = nhiều chỗ sai hơn; phải tự giữ bất biến "không có lỗ hổng giữa các bước done" |
+**Chốt** completedSteps: int + runningStep: int?
+**Trade-offs**
+    - việc diễn đạt lịch sử phải đi kèm việc nhiều state hơn --> nhiều nơi có thể sai --> không đánh đánh đổi
+    - cách A có completedSteps là 1 con số, không có lỗ hổng ở giữa --> giữ được tính
+    - cách B hơn ở việc có thể diễn đạt lịch sử retry nhưng đi kèm có nhiều state hơn=nhiều chỗ để sai hơn --> không đáng đánh đổi ở scope hiện tại
+    - yêu cầu right-sizing, đi kèm với tính tuyến tính tuyệt đối của dự án --> A thỏa mãn tuyệt đối
+    - in case cần biết đã retry 1 bước bao nhiêu cần --> A có thể mở rộng schema= thêm field retryTimes:0 mà không đụng cấu trúc completedSteps/runningStep đã có --> Điểm mạnh tuyệt đối của A: mở rộng=thêm field, không đổi kiểu dữ liệu
+**Xem lại khi** khi cần pipeline tuyến tính (skip step, chạy song song) hoặc lưu lịch sử retry riêng cho từng bước
+
+---
+## 4. Nhận diện user
+**Người đề xuất** Requirements từ đề
+**Bối cảnh** Không yêu cầu auth thật
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. Header `X-User-Email` | Đơn giản nhất, curl dễ | Ai cũng giả mạo được — **không phải bảo mật** |
+| B. Cookie phiên ký | Giống thật hơn | Thêm hạ tầng cho thứ đề nói rõ là không cần |
+**Chốt** A. Header
+**Trade-offs**
+    - Cookie có hành vi giống thật nhưng không giải quyết được vấn đề, đề cũng không yêu cầu auth --> Chọn cách đơn giản nhất là A
+**Xem lại khi** Không
+
+---
+## 5. Chạy việc dài 10-30s
+**Người đề xuất** PLAN.md
+**Bối cảnh** Việc gọi API Gemini mất nhiều thời gian, không thể bắt HTTP Request đứng đợi gây tốn thread, dễ client timeout + trải nghiệm user tệ
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. `Task.Run` fire-and-forget + tự tạo DI scope | Ít code nhất | Không hàng đợi, shutdown là mất việc, khó quan sát |
+| B. `BackgroundService` + `Channel<T>` | Có hàng đợi, shutdown lịch sự, giới hạn được số việc song song | Thêm ~50 dòng và một khái niệm mới |
+
+Cả hai đều thoả FR-23 **nếu** state được persist trước khi chạy — mất việc thì project ở trạng thái "running" và cơ chế stuck (FR-27) sẽ cứu
+**Chốt** B. BackgroundService + Channel<T>
+**Trade-offs**
+    - Đưa vào project này hơi out-of-scope của right-sizing và A phù hợp hơn nhưng đây là dự án học --> chấp nhận
+    - B= Nền tảng chuẩn của server-side cần nắm
+    - Cả 2 cách đề không thể inject trực tiếp 1 Service được đăng ký Scoped nơi xử lý nền --> Để task chạy nền k mất tài nguyên, k được xài ké Scoped của HTTP Request --> Phải tự xin hệ thống cấp 1 Scope mới + độc lập, xài IServiceScopeFactory, thay vì inject trực tiếp IGeminiClient, sẽ inject IServiceScopeFactory vào hàm/class chạy nền
+**Xem lại khi** không
+
+---
+## 6. Chống ghi đè
+**Người đề xuất** Requirements
+**Bối cảnh** dự án dùng file JSON phẳng thay cho database
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. Ghi đè trực tiếp, k lock | code nhanh chỉ 1 dòng | corrupt file gây crash, chắc chắn mất dữ liệu nếu có 2 thao tác cùng lúc, vi phạm FR-24 |
+| B. Khóa toàn cục + ghi đè trực tiếp | code dễ, không ai ghi đè | bottleneck: user A lưu project phải chờ user B, corrupt nếu app crash |
+| C. khóa theo project + ghi file nguyên tử | tối đa hiệu năng, đảm bảo tính toàn vẹn bằng rename | code phức tạp. Dictionary chứa lock lớn dần gây tốn RAM |
+**Chốt** C. Khóa theo project + ghi file nguyên tử = .tmp
+**Trade-offs**
+    - Chấp nhận ConcurrentDictionary phình to mà không dọn vì scope nhỏ, dung lượng này không đáng kể
+    - Cơ chế lock này chỉ chạy trong bộ nhớ 1 instance --> Không chạy được nhiều instance 1 lúc
+    - Chấp nhận file rác: Nếu app crash khi đang ghi file tạm, file này sẽ bị bỏ lại trên đĩa chính nhưng file .json vẫn an toàn
+**Xem lại khi** Khi dự án cần chạy trên nhiều server (scale-out), khi dung lượng RAM của app tăng vượt mức cho phép
+
+---
+## 7. Stack and Storage
+**Người đề xuất** Đề bài
+**Bối cảnh** Bản v1 dùng SQLite thành công, mục tiêu học thêm disk: toàn vẹn dữ liệu, concurrency, thao tác I/O mà db bình thường cung cấp sẵn
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. .NET + React JS + SQLite | ACID, Concurrency an toàn, truy vấn tốc độ cao | Không học được cách vận hành, kiến trúc cồng kềnh |
+| B. .NET + React JS + JSON file on disk | Hiểu sâu vận hành, tính minh bạch tuyệt đối, zero setup | Thiếu ACID, ghi đè tốn kém, query chậm |
+**Chốt** B. .NET + React JS + JSON file on disk
+**Trade-offs**
+    - Không transaction --> tự thiết kế mỗi thao tác chỉ chạm 1 file (docs/03-design.md B1)
+    - Không UPDATE...WHERE --> tự làm read-check-write trong lock (docs/03-design.md B6)
+    - Không query/index --> quét thư mục, chấp nhận cho dự án scope nhỏ
+    - Chỉ đúng khi chạy 1 process --> chấp nhận giả định (docs/03-design.md A6)
+**Xem lại khi** Mục tiêu học chuyển thành cần chạy thật, nhiều user cùng lúc --> Khi đó SQLite/Postgres phù hợp hơn
+
+---
+## 8.
+**Người đề xuất**
+**Bối cảnh**
+**Options**
+**Chốt**
+**Trade-offs**
+**Xem lại khi**
+
+---
 ## Cần có ít nhất các mục sau
 
-- [ ] **Stack và storage** — vì sao .NET + React JS; vì sao JSON file thay vì SQLite, dù bản trước đã dùng SQLite thành công. Cái giá: không transaction, không query, chỉ đúng với một process.
-- [ ] **Mô hình hoá tiến độ pipeline** — `completedSteps` + `runningStep`, hay mảng 5 trạng thái?
-- [ ] **Chống chạy trùng khi refresh / double-click / hai tab** — lock ở đâu, vì sao client-side là không đủ.
-- [ ] **Gửi text sách một lần** — chọn cơ chế nào, con trỏ ngữ cảnh persist ra sao, hết hạn thì sao.
-- [ ] **Xử lý bước treo** — ngưỡng bao nhiêu, ai phát hiện.
-- [ ] **Right-sizing** — những abstraction đã **cố ý không** thêm (Repository interface, MediatR, tầng Application riêng) và vì sao.
+- [x] **Stack và storage** — vì sao .NET + React JS; vì sao JSON file thay vì SQLite, dù bản trước đã dùng SQLite thành công. Cái giá: không transaction, không query, chỉ đúng với một process.
+- [x] **Mô hình hoá tiến độ pipeline** — `completedSteps` + `runningStep`, hay mảng 5 trạng thái?
+- [x] **Chống chạy trùng khi refresh / double-click / hai tab** — lock ở đâu, vì sao client-side là không đủ.
+- [x] **Gửi text sách một lần** — chọn cơ chế nào, con trỏ ngữ cảnh persist ra sao, hết hạn thì sao.
+- [ ] **Xử lý bước treo** — ngưỡng bao nhiêu, ai phát hiện. **PHASE 8**
+- [x] **Right-sizing** — những abstraction đã **cố ý không** thêm (Repository interface, MediatR, tầng Application riêng) và vì sao.
 
 ## Chỗ tôi override Claude
+**ghi nội dung trước, detail để sau**
 
-> Đề bài gốc coi đây là tín hiệu mạnh nhất. Ở dự án tự học, nó có giá trị khác: mỗi lần tôi thấy lời khuyên của Claude sai/thừa/quá phức tạp và tự đưa ra lựa chọn khác — đó là bằng chứng tôi đã thực sự hiểu, không phải chép.
-
-- [ ] Override #1: …
+- [ ] Override #1: Decision 5 chọn BackgroundService thay vì Task.Run Claude đề xuất --> Chấp nhận viết thêm code để học cái chuẩn
 - [ ] Override #2: …
 - [ ] Override #3: …
 
