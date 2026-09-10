@@ -133,10 +133,43 @@ Cả hai đều thoả FR-23 **nếu** state được persist trước khi chạ
 **Xem lại khi** Mục tiêu học chuyển thành cần chạy thật, nhiều user cùng lúc --> Khi đó SQLite/Postgres phù hợp hơn
 
 ---
-## 8.
-**Người đề xuất**
-**Bối cảnh**
+## 8. Giữ Project Store
+**Người đề xuất** Tôi
+**Bối cảnh** Đổi goal dự án, tập trung vào testing, cân nhắc các thay đổi để tâp trung vào testing
 **Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. Thêm interface | Mock được store trong unit test | Tái tạo đúng abstraction rỗng mà ##1 cố tình tránh |
+| B. Giữ ProjectStore cụ thể | Test PipelineService bằng ProjectStore thật --> bằng chứng thuyết phục code hoạt động đúng | Test chạm filesystem thật (trỏ thư mục tạm) --? chạy chậm hơn mock |
+**Chốt** B. Giữ ProjectStore cụ thể
+**Trade-offs**
+    - Lợi ích của A chỉ tiện hơn khi viết Moq setup, giá trị ít hơn việc tái tao6 abstraction rỗng đá cố tránh
+    - Test PipelineService dùng Store thật, quay atomic write + lock thật --> chậm hơn, nhưng đổi lại test có giá trị chứng minh cao
+**Xem lại khi** Khi cần đổi sang DB hoặc môi trường test cần khác biệt lớn
+
+---
+## 9. Schema cũ + bổ sung nhỏ
+**Người đề xuất** 
+**Bối cảnh** Đổi goal dự án, tập trung vào testing, cân nhắc các thay đổi để tâp trung vào testing
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. nested + per-item status (schema mới) | Giải quyết vấn đề resume theo item, tường minh hơn khi đọc JSON | Viết lại toàn bộ B2, B4, A1, A5 đã hoàn thành ở phase 1; tái tạo lại lỗ hổng "giữa trạng thái" ##3 đã loại |
+| B. schema cũ + bổ sung | vẫn giải quyết được vấn đề resume theo item, retry logic chỉ cần lọc images.Where(i=>i.step==3) để biết nhân vật nào có ảnh rồi | tính tường minh thấp hơn, phải suy luận trạng thái item từ images[] thay vì đọc thẳng field |
+**Chốt** B. Schema cũ + bổ sung
+**Trade-offs**
+    - Không đổi cấu trúc completedSteps/runningStep --> giữ nguyên tính bất khả thi của trạng thái sai từ ##3
+    - Cần thêm 1 đoạn logic mới trong PipelineService khi code Phase 8 (lọc image[] theo step)
+    - Giả định ngầm: ảnh cũ của item đã thành công không bị xóa khi retry cả bước, nếu xóa thì resume theo item vô nghĩa
+**Xem lại khi** Khi cần lưu thêm thông tin per-item khác mà không suy luận được từ images[]
+
+---
+## 10.
+**Người đề xuất**
+**Bối cảnh** 
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
 **Chốt**
 **Trade-offs**
 **Xem lại khi**

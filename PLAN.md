@@ -30,7 +30,7 @@ Vì sao gộp architecture + data model + API contract vào một file `03-desig
 
 **1. Spec trước, code sau.** Không gõ dòng code nào cho một tính năng chưa được mô tả trong `docs/`.
 
-**2. Học on-the-go (just-in-time learning).** Không học trước cả một cuốn sách. Gặp chỗ không biết thì dừng lại, học **đúng phần đó**, rồi quay lại code. Vòng lặp:
+**2. Học on-the-go (just-in-time learning).** Deadline 30h không thể áp dụng hoàn toàn, chỉ áp dụng cho những khái niệm thực sự khó/mới. Không học trước cả một cuốn sách. Gặp chỗ không biết thì dừng lại, học **đúng phần đó**, rồi quay lại code. Vòng lặp:
 
 ```
 Gặp thứ không biết
@@ -38,8 +38,6 @@ Gặp thứ không biết
 Diễn đạt được câu hỏi cụ thể ("làm sao ghi file JSON mà không hỏng nếu app crash giữa chừng?")
    ↓
 Học nhỏ nhất đủ dùng (đọc doc / hỏi Claude / viết file thử nghiệm)
-   ↓
-Viết lại bằng lời của mình vào docs/learning-log.md
    ↓
 Áp vào code thật
    ↓
@@ -140,7 +138,7 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 - [ ] `ProjectStore`: `GetAsync(id)`, `ListByUserAsync(email)`, `SaveAsync(project)`, và quan trọng nhất `UpdateAsync(id, Func<Project, bool> mutate)` — đọc-sửa-ghi **bên trong lock**.
 - [ ] Test: hai lời gọi `UpdateAsync` song song không được làm mất update của nhau.
 
-**Decision:** khoá theo project hay khoá toàn cục? Đường dẫn file có được chứa email thô không (ký tự lạ, hoa thường, path traversal)?
+**Decision:** khóa theo project (DECISIONS.md ##6). Path dùng userKey (slug+hash) (DECISIONS ##2.2)
 
 **DoD:** viết được một test chạy 50 update song song lên cùng một project, kết quả cuối vẫn đúng.
 
@@ -263,17 +261,35 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 
 ## Phase 10 — Test cả hai phía
 
-**Cần học:** `WebApplicationFactory` (integration test cho Minimal API); Vitest + React Testing Library.
+> Trọng tâm của dự án (`CLAUDE.md §0`) — đầu tư kỹ nhất ở đây, không tính trong deadline 30h của Phase 2-9.
 
-**Việc cần làm:**
-- [ ] Backend: thứ tự bước, chống trùng, retry, resume, cap. Mỗi test dùng thư mục `data/` tạm riêng.
-- [ ] Frontend: 2–3 component đáng test nhất ở các state loading / error / empty.
+**Cần học:** `WebApplicationFactory` (integration test cho Minimal API); Vitest + React Testing Library; viết test case/test plan/bug report thủ công.
+
+**Tầng 1 — Unit test `PipelineService` (xUnit + Moq).** Tầng quan trọng nhất. Mock `IGeminiClient`; dùng `ProjectStore` **thật** trỏ vào thư mục `data/` tạm, không mock Store (xem lý do ở `DECISIONS.md`). Tối thiểu 5-7 test:
+- [ ] Bước đã `Completed` thì không gọi lại — `mockGemini.Verify(x => x.GenerateStyle(...), Times.Never())`.
+- [ ] Resume đúng chỗ — bước 1-2 xong, bước 3 failed → assert gọi đúng bước 3.
+- [ ] Resume theo item — 3 nhân vật, 2 portrait đã xong → assert đúng 1 lần gọi sinh ảnh cho nhân vật còn thiếu (dựa vào `images[]`, xem `docs/03-design.md` B3).
+- [ ] Lỗi được ghi lại chứ không ném ra — mock throw → assert `failedStep`/`lastError` đúng, kết quả bước trước vẫn nguyên.
+- [ ] Chặn chạy trùng — bước đang `Running` → request thứ hai bị từ chối.
+
+**Tầng 2 — Integration test bằng `WebApplicationFactory`,** inject `FakeGeminiClient`, gọi endpoint thật. 3-4 test: tạo project, chạy pipeline, đọc status.
+
+**Tầng 3 — FE test bằng Vitest + React Testing Library,** 3-4 test vào chỗ có logic: stepper render đúng status, form tạo project chặn text rỗng, polling dừng khi pipeline xong.
+
+**E2E/Playwright:** không làm ở bản đầu — ghi ở `README.md` như nice-to-have, chưa quyết định làm.
+
+**Test case thủ công (bắt buộc cho mục tiêu CV Tester):**
+- [ ] Viết test plan: phạm vi, chiến lược, môi trường test.
+- [ ] Viết test case cho luồng chính + luồng lỗi (bảng: ID, bước, input, expected, actual, pass/fail).
+- [ ] Chạy tay ít nhất 1 lượt đầy đủ, ghi bug report mẫu nếu tìm thấy lỗi (kể cả lỗi cố ý tạo ra để có mẫu thật).
+
+**Việc cần làm khác:**
 - [ ] `test.sh` chạy cả hai bằng một lệnh.
 - [ ] **Tạo và viết `TESTING.md`**: test gì, **cố ý không test gì và tại sao**, kèm output của một lần chạy thật.
 
-**DoD:** `./test.sh` xanh trên máy sạch.
+**DoD:** `./test.sh` xanh trên máy sạch; có bộ test case thủ công đọc được, không chỉ code test.
 
-**Commit:** `test: backend pipeline suite` · `test: frontend component states` · `docs: testing strategy`
+**Commit:** `test: backend pipeline suite` · `test: frontend component states` · `docs: testing strategy` · `docs: manual test plan and case`
 
 ---
 

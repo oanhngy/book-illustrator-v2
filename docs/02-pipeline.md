@@ -84,7 +84,7 @@ each step have belowed content:
    - Re-construct Context (khôi phục trạng thái ngầm): (1) tự động upload lại file book.txt lên gg lấy book.uri mới và (2) tạo session mới
    - tái sdung dữ liệu đã có: mất id cũ nhưng các data như style, characters... đã lưu thành công --> k bắt AI tạo lại, only prompt thiết lập bối cảnh + tiếp tục bước dang dở
 
-**Solution FR-23**: có Id mới, cần lưu vào DB kèm user_id/project_id. Khi F5, BE only query lấy ra ID cưới cùng, nhét vào previous_interaction_id r gọi API tiếp
+**Solution FR-23**: có Id mới, cần lưu vào project.json kèm user_id/project_id. Khi F5, BE only query lấy ra ID cưới cùng, nhét vào previous_interaction_id r gọi API tiếp
 
 ## 3. Structured output (bước 2 và 4)
 

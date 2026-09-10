@@ -53,6 +53,8 @@ Một project chia theo thư mục
 Quy tắc Dependency: Endpoint --> Pipeline --> {Storage, Gemini} cho thao tác ghi/orchestration (claim, run step). Storage không được biết khái niệm nghiệp vụ pipeline (only CRUD qua Get/Save/Update(mutate)), việc đọc (GET) được gọi thẳng Store không vi phạm nguyên tắc
 Trade-offs ở `DECISIONS.md` ##1
 
+**Cân nhắc lại (2026-09-10, dưới goal CV Tester):** đề xuất thêm `IProjectStore` interface để dễ mock trong unit test — giữ nguyên, không thêm. Unit test `PipelineService` dùng `ProjectStore` thật trỏ `data/` tạm, không mock — test chạy qua atomic write + lock thật, giá trị chứng minh cao hơn mock. Chi tiết ở `DECISIONS.md`.
+
 ## A4. Chạy việc dài 10–30s
 Luồng: Nhận request --> Ghi nhận state --> Trả HTTP 202 Accepted ASAP --> Chạy việc gọi Gemini ở chế độ nền
 BackgroundService + Channel<T>= nền tảng chuẩn server-sice --> Học thêm trong Phase 6
@@ -170,6 +172,12 @@ Trade-offs ở `DECISIONS.md` ##2
 **bookText để trog file hay tách?**
 --> Tách riêng vì field trong đó thay đổi liên tục, để chung thì phải chép lại toàn bộ nội dung còn lại dù không thay đổi nhiều lần --> tốn kém + write amplification không cần thiết 
 Trade-off: khi trả full detail (C4, cần cả bookText) thì server phải đọc 2 file thay vì 1, nhưng chi phí READ rẻ hơn WRITE, + tần suất thấp --> đáng đánh đổi
+
+**Resume theo item (Portraits/Illustrations) — không đổi schema (cân nhắc lại 2026-09-10, dưới goal CV Tester):**
+Khi retry step 3/5, `PipelineService` lọc `project.images.Where(i => i.step == step)` để biết những
+`index` (nhân vật/chương) nào đã có ảnh — chỉ gọi Gemini cho phần còn thiếu, không generate lại ảnh
+đã có. Tận dụng `images[]` sẵn có, không cần đổi cấu trúc `completedSteps`/`runningStep`. Chi tiết
+lý do và option đã cân nhắc ở `DECISIONS.md`.
 
 ## B4. Mô hình hoá tiến độ
 completedSteps: int + runningStep: int?
