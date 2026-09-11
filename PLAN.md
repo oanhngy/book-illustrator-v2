@@ -112,7 +112,7 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 - [x] `npm create vite` → project `client` (React + JavaScript), gọi được `/api/health` và in ra màn hình.
 - [x] Xử lý CORS hoặc proxy trong `vite.config.js`.
 - [x] Cập nhật `.gitignore`, tạo `.env.example`.
-- [ ] `start.sh` chạy cả hai bằng một lệnh.
+- [x] `start.sh` chạy cả hai bằng một lệnh.
 
 **DoD:** `./start.sh` → mở trình duyệt → thấy chữ đến từ backend.
 
@@ -121,8 +121,6 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 ---
 
 ## Phase 3 — Storage layer (JSON trên disk)
-
-> Khó nhất + đáng học nhất - HỌC KỸ
 
 **Mục tiêu:** đọc/ghi JSON an toàn, thay thế được vai trò của database.
 
@@ -133,9 +131,9 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 - Vì sao `lock` (Monitor) **không dùng được** với `async/await`.
 
 **Việc cần làm:**
-- [ ] Dựng thư mục `data/` theo phần B của `docs/03-design.md`.
-- [ ] `JsonStore`: `ReadAsync<T>(path)`, `WriteAsync<T>(path, value)` — ghi atomic.
-- [ ] `ProjectStore`: `GetAsync(id)`, `ListByUserAsync(email)`, `SaveAsync(project)`, và quan trọng nhất `UpdateAsync(id, Func<Project, bool> mutate)` — đọc-sửa-ghi **bên trong lock**.
+- [x] Dựng thư mục `data/` theo phần B của `docs/03-design.md`.
+- [x] `JsonStore`: `ReadAsync<T>(path)`, `WriteAsync<T>(path, value)` — ghi atomic.
+- [x] `ProjectStore`: `GetAsync(id)`, `ListByUserAsync(email)`, `SaveAsync(project)`, và quan trọng nhất `UpdateAsync(id, Func<Project, bool> mutate)` — đọc-sửa-ghi **bên trong lock**.
 - [ ] Test: hai lời gọi `UpdateAsync` song song không được làm mất update của nhau.
 
 **Decision:** khóa theo project (DECISIONS.md ##6). Path dùng userKey (slug+hash) (DECISIONS ##2.2)
@@ -304,20 +302,3 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 
 **DoD:** giải thích được toàn bộ dự án cho người khác trong 15 phút mà không mở code.
 
----
-
-## Bảng tra: học gì ở phase nào
-
-| Chủ đề | Phase | Đã biết? |
-|---|---|---|
-| Gemini REST: structured output, image, chaining | 0, 5 | ☐ |
-| Minimal API, DI, middleware | 2, 4 | ☐ |
-| `System.Text.Json` | 3 | ☐ |
-| Atomic file write | 3 | ☐ |
-| `SemaphoreSlim`, async lock | 3 | ☐ |
-| Background work trong ASP.NET Core | 6 | ☐ |
-| State machine cho tiến độ | 6, 8 | ☐ |
-| Phục vụ file nhị phân, path traversal | 7 | ☐ |
-| React hooks, polling, cleanup | 9 | ☐ |
-| `WebApplicationFactory` | 10 | ☐ |
-| Vitest + React Testing Library | 10 | ☐ |
