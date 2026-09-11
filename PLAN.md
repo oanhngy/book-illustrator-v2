@@ -108,9 +108,9 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 **Cần học:** `dotnet new`, cấu trúc solution; Vite + React; CORS / dev proxy.
 
 **Việc cần làm:**
-- [ ] `dotnet new web` → project `server`, chạy được `GET /api/health`.
-- [ ] `npm create vite` → project `client` (React + JavaScript), gọi được `/api/health` và in ra màn hình.
-- [ ] Xử lý CORS hoặc proxy trong `vite.config.js`.
+- [x] `dotnet new web` → project `server`, chạy được `GET /api/health`.
+- [x] `npm create vite` → project `client` (React + JavaScript), gọi được `/api/health` và in ra màn hình.
+- [x] Xử lý CORS hoặc proxy trong `vite.config.js`.
 - [ ] Cập nhật `.gitignore`, tạo `.env.example`.
 - [ ] `start.sh` chạy cả hai bằng một lệnh.
 
