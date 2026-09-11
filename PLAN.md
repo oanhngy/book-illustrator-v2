@@ -134,13 +134,15 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 - [x] Dựng thư mục `data/` theo phần B của `docs/03-design.md`.
 - [x] `JsonStore`: `ReadAsync<T>(path)`, `WriteAsync<T>(path, value)` — ghi atomic.
 - [x] `ProjectStore`: `GetAsync(id)`, `ListByUserAsync(email)`, `SaveAsync(project)`, và quan trọng nhất `UpdateAsync(id, Func<Project, bool> mutate)` — đọc-sửa-ghi **bên trong lock**.
-- [ ] Test: hai lời gọi `UpdateAsync` song song không được làm mất update của nhau.
+
+> Test tự động cho concurrency của storage layer (50 update song song) dời sang Phase 10 —
+> viết trong lúc dựng MVP làm chậm tiến độ 30h; dồn hết automated test vào đợt testing riêng.
 
 **Decision:** khóa theo project (DECISIONS.md ##6). Path dùng userKey (slug+hash) (DECISIONS ##2.2)
 
-**DoD:** viết được một test chạy 50 update song song lên cùng một project, kết quả cuối vẫn đúng.
+**DoD:** giải thích lại được vì sao `SemaphoreSlim` theo project + atomic write (tmp + rename) chống được mất update khi nhiều request cùng lúc — không cần test tự động ở phase này.
 
-**Commit:** `feat: json file store with atomic writes` · `feat: per-project write lock` · `test: concurrent updates keep every write`
+**Commit:** `feat: json file store with atomic writes` · `feat: per-project write lock`
 
 ---
 
@@ -194,9 +196,9 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 - [ ] Claim bước: chỉ được chạy step N khi `completedSteps == N-1` và không có step nào đang chạy — kiểm tra **bên trong lock**.
 - [ ] Lỗi → lưu `lastError` + `failedStep`, project vẫn dùng được.
 
-**DoD:** double-click nút Run chỉ tạo đúng **một** lời gọi Gemini. Chứng minh bằng test.
+**DoD:** double-click nút Run chỉ tạo đúng **một** lời gọi Gemini — tự tay verify qua tab Network (1 request `202`, request thứ hai `409`). Test tự động cho hành vi này dời sang Phase 10.
 
-**Commit:** `feat: run style step` · `feat: characters step with server-side cap` · `test: duplicate run requests are rejected`
+**Commit:** `feat: run style step` · `feat: characters step with server-side cap`
 
 ---
 
@@ -230,9 +232,9 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 
 **Decision:** ngưỡng "treo" là bao nhiêu phút? Ai phát hiện — server khi đọc, hay user bấm nút force?
 
-**DoD:** viết ra được 5 kịch bản hỏng và test tự động cho ít nhất 3 kịch bản.
+**DoD:** viết ra được 5 kịch bản hỏng, tự tay verify ít nhất 3 kịch bản. Test tự động cho các kịch bản này dời sang Phase 10.
 
-**Commit:** `feat: stale step recovery` · `test: pipeline resumes after restart`
+**Commit:** `feat: stale step recovery`
 
 ---
 
@@ -269,8 +271,11 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 - [ ] Resume theo item — 3 nhân vật, 2 portrait đã xong → assert đúng 1 lần gọi sinh ảnh cho nhân vật còn thiếu (dựa vào `images[]`, xem `docs/03-design.md` B3).
 - [ ] Lỗi được ghi lại chứ không ném ra — mock throw → assert `failedStep`/`lastError` đúng, kết quả bước trước vẫn nguyên.
 - [ ] Chặn chạy trùng — bước đang `Running` → request thứ hai bị từ chối.
+- [ ] Concurrency storage layer — 50 `ProjectStore.UpdateAsync` song song lên cùng 1 project → không mất update nào (dời từ Phase 3).
 
 **Tầng 2 — Integration test bằng `WebApplicationFactory`,** inject `FakeGeminiClient`, gọi endpoint thật. 3-4 test: tạo project, chạy pipeline, đọc status.
+- [ ] Double-click Run — 2 request `POST .../steps/{step}/run` gửi đồng thời → đúng 1 cái `202`, cái còn lại `409` (dời từ Phase 6).
+- [ ] Resume/stale — dựng project ở trạng thái stale (`runningSince` quá ngưỡng), gọi lại → hành vi đúng như đã verify tay ở Phase 8 (dời từ Phase 8).
 
 **Tầng 3 — FE test bằng Vitest + React Testing Library,** 3-4 test vào chỗ có logic: stepper render đúng status, form tạo project chặn text rỗng, polling dừng khi pipeline xong.
 

@@ -132,7 +132,7 @@ Một task chỉ được coi là xong khi **cả 4** điều sau đúng:
 
 1. Code chạy được và tôi đã tự tay chạy thử.
 2. Tôi **giải thích lại được** cho Claude nghe: đoạn này làm gì, tại sao viết vậy, hỏng thì hỏng ở chỗ nào.
-3. Nếu task có logic → có test. Với mục tiêu CV Tester, "có test" nghĩa là **cả hai**: automated test (theo tầng tương ứng trong `PLAN.md`) **và** test case thủ công ghi vào tài liệu test case/test plan — không coi một trong hai là đủ. Task thuần doc (không có logic) ghi rõ lý do không cần test.
+3. Nếu task có logic ở **Phase 2-9** → tự tay verify được (chạy thử, xem kết quả đúng) + ghi nháp 1 dòng test case (kịch bản, expected) — automated test **dồn hết vào Phase 10** để không phá deadline 30h của Phase 2-9 (xem PLAN.md Phase 3/6/8). Nếu task có logic ở **Phase 10** → bắt buộc **cả hai**: automated test (theo tầng tương ứng trong `PLAN.md`) **và** test case thủ công ghi vào tài liệu test case/test plan — không coi một trong hai là đủ. Task thuần doc (không có logic) ghi rõ lý do không cần test.
 4. Nếu task có quyết định kiến trúc → đã ghi vào `DECISIONS.md`.
 
 ---
