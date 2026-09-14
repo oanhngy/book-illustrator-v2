@@ -135,7 +135,7 @@ Cả hai đều thoả FR-23 **nếu** state được persist trước khi chạ
 ---
 ## 8. Giữ Project Store
 **Người đề xuất** Tôi
-**Bối cảnh** Đổi goal dự án, tập trung vào testing, cân nhắc các thay đổi để tâp trung vào testing
+**Bối cảnh** Cân nhắc thêm interface cho `ProjectStore` để mock được trong unit test `PipelineService` (Phase 10)
 **Options**
 | Cách | Được | Mất |
 |---|---|---|
@@ -149,8 +149,8 @@ Cả hai đều thoả FR-23 **nếu** state được persist trước khi chạ
 
 ---
 ## 9. Schema cũ + bổ sung nhỏ
-**Người đề xuất** 
-**Bối cảnh** Đổi goal dự án, tập trung vào testing, cân nhắc các thay đổi để tâp trung vào testing
+**Người đề xuất** Tôi
+**Bối cảnh** Resume theo item (Portraits/Illustrations) cần biết nhân vật/chương nào đã có ảnh — cân nhắc đổi schema `project.json` hay tận dụng `images[]` sẵn có
 **Options**
 | Cách | Được | Mất |
 |---|---|---|

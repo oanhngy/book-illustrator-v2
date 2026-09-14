@@ -4,15 +4,13 @@
 
 Đây là bản **viết lại từ đầu** của dự án `book-illustrator`, dựng lại pipeline từ notebook *Illustrate a book* của Google.
 
-**Mục tiêu đã đổi (2026-09-10):** không còn là học thuần tuý, mà là **hoàn thành một dự án đủ chất lượng để đưa vào CV ứng tuyển vị trí Manual Tester/QA**. Dự án phải chứng minh được hai thứ:
-1. Đọc hiểu và làm việc nghiêm túc với một codebase thực tế (backend + frontend + tích hợp AI).
-2. **Tư duy kiểm thử chuyên nghiệp** — không chỉ code test, mà cả **test case viết tay, test plan, bug report** như một Tester thật sự làm việc.
+**Mục tiêu đã đổi lần 2 (09-14):** Quay lại **hiểu trọn vẹn từng dòng code trong dự án**, tập trung năng lực **dev** (backend + frontend + tích hợp AI).
 
-- **Deadline: 30 giờ cho Backend + Frontend (Phase 2-9)**, tính từ 2026-09-10. Phase 10 (testing) và Phase 11 (docs/README) tính riêng, ngoài 30 giờ này. Ưu tiên hoàn thành đúng hạn ở mức **tối thiểu khả dụng (MVP)** hơn là đào sâu mọi ngóc ngách kiến trúc. Phần được đầu tư kỹ nhất trong dự án là **testing**, không phải độ tinh vi của code hay kiến trúc.
+- **Deadline: 48 giờ cho toàn bộ dự án**, tính từ 09-14. Không tách riêng testing ra ngoài deadline như trước — testing là một phần công việc bình thường của dev, không phải sản phẩm trung tâm cần đầu tư nhiều hơn các phần khác.
 - `docs/gradion-assessment-intern-software-engineer.md` — nguồn duy nhất về **chức năng cần có**.
 - `PLAN.md` — quy trình thực hiện, chia phase.
 - `DECISIONS.md` — nơi ghi lại mọi quyết định kỹ thuật và cái giá đã chấp nhận.
-- `TESTING.md` (dự kiến Phase 10, có thể đẩy sớm hơn) — không chỉ là báo cáo cuối, mà là **sản phẩm chính** của dự án: test case, test plan, bug report mẫu.
+- `TESTING.md` (Phase 10) — chiến lược test + report một lần chạy thật.
 
 **Stack đã chốt:**
 
@@ -24,7 +22,7 @@
 | Ảnh + text sách | File trên disk, phục vụ qua chính API của mình |
 | AI provider | Gemini API (REST) |
 
-Storage bằng JSON file **giữ nguyên** như quyết định ban đầu — không còn vì "khó hơn nên đáng học", mà vì Phase 1 (kiến trúc, data model, API contract) đã thiết kế trọn vẹn dựa trên lựa chọn này trong `DECISIONS.md`/`docs/03-design.md`; đổi sang database lúc này sẽ phải làm lại toàn bộ. Cái giá (không transaction, tự lo concurrency) vẫn là cái giá thật — và chính độ phức tạp đó (race condition, atomic write, resume sau crash) lại là **nguồn edge-case tốt** để viết test case chứng minh tư duy kiểm thử.
+Storage bằng JSON file **giữ nguyên** như quyết định ban đầu — vẫn vì "khó hơn nên đáng học" (đúng tinh thần hiểu trọn vẹn), và Phase 1 (kiến trúc, data model, API contract) cũng đã thiết kế trọn vẹn dựa trên lựa chọn này trong `DECISIONS.md`/`docs/03-design.md`; đổi sang database lúc này sẽ phải làm lại toàn bộ. Cái giá (không transaction, tự lo concurrency) vẫn là cái giá thật — và chính độ phức tạp đó (race condition, atomic write, resume sau crash) lại là **nguồn kiến thức tốt nhất** của dự án này.
 
 ---
 
@@ -81,14 +79,13 @@ Sau khi review pass → **Claude nhắc commit và đưa sẵn commit message** 
 - Sau mỗi khái niệm lớn, hỏi ngược lại tôi 1 câu để kiểm tra tôi có thật sự hiểu không.
 - Nhắc tôi khi tôi đang **over-engineer** (thêm interface/abstraction cho thứ chưa cần).
 - Cảnh báo khi một quyết định của tôi sẽ gây đau ở phase sau — nêu rõ đau ở đâu, rồi vẫn để tôi quyết.
-- Nhắc viết **test case thủ công** (test plan, bug report mẫu) song song lúc code, không dồn hết vào cuối dự án — đúng tinh thần "testing là trọng tâm" ở §0.
 
 **Claude KHÔNG ĐƯỢC:**
 - Tự ý sửa/tạo file. Muốn tạo hay sửa thì mô tả và xin phép.
 - Đưa code hoàn chỉnh khi tôi chưa yêu cầu. Khi tôi yêu cầu "gợi ý", ưu tiên **pseudo-code / skeleton có `// TODO`**; chỉ đưa code đầy đủ khi tôi nói rõ "viết code đầy đủ giúp tôi".
 - Làm nhiều task một lúc. Một lần một task.
 - Nhảy sang bước tiếp theo khi bước hiện tại chưa đạt Definition of Done.
-- Viện lý do "cho nhanh" để bỏ qua giải thích, review, hoặc test — deadline 30 giờ áp dụng cho tốc độ hoàn thành, không phải cái cớ để làm ẩu hoặc bỏ test case.
+- Viện lý do "cho nhanh" để bỏ qua giải thích, review, hoặc test — deadline 48 giờ áp dụng cho tốc độ hoàn thành, không phải cái cớ để làm ẩu hoặc bỏ test.
 - Trả lời "tùy em" cho một câu hỏi kỹ thuật có câu trả lời rõ ràng.
 
 ---
@@ -132,7 +129,7 @@ Một task chỉ được coi là xong khi **cả 4** điều sau đúng:
 
 1. Code chạy được và tôi đã tự tay chạy thử.
 2. Tôi **giải thích lại được** cho Claude nghe: đoạn này làm gì, tại sao viết vậy, hỏng thì hỏng ở chỗ nào.
-3. Nếu task có logic ở **Phase 2-9** → tự tay verify được (chạy thử, xem kết quả đúng) + ghi nháp 1 dòng test case (kịch bản, expected) — automated test **dồn hết vào Phase 10** để không phá deadline 30h của Phase 2-9 (xem PLAN.md Phase 3/6/8). Nếu task có logic ở **Phase 10** → bắt buộc **cả hai**: automated test (theo tầng tương ứng trong `PLAN.md`) **và** test case thủ công ghi vào tài liệu test case/test plan — không coi một trong hai là đủ. Task thuần doc (không có logic) ghi rõ lý do không cần test.
+3. Nếu task có logic → có test (theo tầng tương ứng trong `PLAN.md`, viết ngay trong phase đó — không dồn qua Phase 10). Task thuần doc (không có logic) ghi rõ lý do không cần test.
 4. Nếu task có quyết định kiến trúc → đã ghi vào `DECISIONS.md`.
 
 ---

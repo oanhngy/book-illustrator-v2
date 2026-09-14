@@ -1,10 +1,11 @@
 # 01 — Requirements
 
-> Nguồn: `docs/gradion-assessment-intern-software-engineer.md`.
-> File này biến đề bài thành **checklist có mã**. Mọi thứ code ra phải truy ngược được về một mã ở đây.
-> Priority: **P0** bắt buộc cho MVP (thiếu thì không kể được câu chuyện CV, deadline 30h)
-> · **P1** nên có nếu còn giờ, pipeline chính vẫn chạy đúng khi thiếu
-> · **P2** có thể bỏ — nếu bỏ, phải ghi lý do vào README/TESTING.md.
+Nguồn: `docs/gradion-assessment-intern-software-engineer.md`
+
+Priority: 
+**P0** bắt buộc, làm trước trong deadline 48h
+**P1** làm nếu còn giờ, pipeline chính vẫn chạy đúng khi thiếu
+**P2** có thể bỏ — nếu bỏ, phải ghi lý do vào README/TESTING.md.
 
 ---
 
@@ -14,7 +15,7 @@
 |---|---|---|
 | FR-01 | Đăng nhập bằng **email + tên**, không mật khẩu, không OAuth | P0 |
 | FR-02 | Email đã tồn tại → nạp project của user đó; chưa có → tạo user mới | P0 |
-| FR-03 | Có sign out | P1 |
+| FR-03 | Có sign out | P2 |
 
 ## 2. Projects
 
@@ -35,13 +36,13 @@
 | FR-22 | Bước N không chạy được nếu bước N-1 chưa thành công | P0 |
 | FR-23 | **Resumable**: refresh / logout / restart server giữa chừng → mở lại thấy đúng trạng thái, không mất kết quả, không chạy lại từ đầu | P0 |
 | FR-24 | **No duplicate calls**: refresh, tab thứ hai, double-click → không gọi Gemini hai lần | P0 |
-| FR-25 | In-progress phải nói rõ **bước nào** đang chạy, không phải spinner trống | P1 |
+| FR-25 | In-progress phải nói rõ **bước nào** đang chạy, không phải spinner trống | P0 |
 | FR-26 | Bước lỗi → project vẫn dùng được, retry **đúng bước đó** | P0 |
-| FR-27 | Bước treo ở trạng thái "đang chạy" → user có đường thoát, không sửa file bằng tay | P1 |
+| FR-27 | Bước treo ở trạng thái "đang chạy" → user có đường thoát, không sửa file bằng tay | P0 |
 | FR-28 | Không auto-retry Gemini trong vòng lặp. Retry chỉ do user bấm | P0 |
 | FR-29 | Text sách chỉ gửi cho Gemini **một lần**, các bước sau dùng lại ngữ cảnh | P0 |
 | FR-30 | Cap **≤ 2 nhân vật**, **≤ 1 chương** — ép ở **server**, không phải ở UI | P0 |
-| FR-31 | Bước 1 nhận style do user nhập (tuỳ chọn); không nhập thì sinh từ text sách | P1 |
+| FR-31 | Bước 1 nhận style do user nhập (tuỳ chọn); không nhập thì sinh từ text sách | P0 |
 | FR-32 | Ảnh hiện **từng tấm** khi sinh xong, không đợi cả bước | P0 |
 | FR-33 | Retry giữ nguyên ảnh cũ, chỉ sinh ảnh khi thiếu | P0 |
 
@@ -67,8 +68,8 @@
 | NFR-01 | Storage: **JSON files trên disk**. Tách theo user/project, an toàn khi ghi đồng thời | P0 |
 | NFR-02 | Ảnh + text sách nằm trên filesystem local, phục vụ qua API của mình. Không S3/CDN | P0 |
 | NFR-03 | Gemini API key qua biến môi trường, **không commit**. Có `.env.example` | P0 |
-| NFR-04 | Test cả backend lẫn frontend (automated: unit/integration/FE) và test case thủ công + test plan + bug report mẫu, ghi trong TESTING.md, kèm report một lần chạy thật | P0 |
-| NFR-05 | **Một lệnh** chạy stack, **một lệnh** chạy test | P1 |
+| NFR-04 | Test cả backend lẫn frontend (automated: unit/integration/FE) + `TESTING.md` + report một lần chạy thật | P0 |
+| NFR-05 | **Một lệnh** chạy stack, **một lệnh** chạy test | P0 |
 | NFR-06 | Right-sized: thêm bước thứ 6 không phải viết lại, nhưng không có abstraction cho thứ chưa ship | Nguyên tắc |
 | NFR-07 | Git history: commit nhỏ, có nghĩa, rải theo thời gian | Nguyên tắc |
 | NFR-08 | Chấp nhận text dài tối đa 500.000 ký tự | P0 |
@@ -81,7 +82,7 @@
 - Chạy nhiều instance server cùng lúc
 - Không cho phép re-run bước đã Completed
 
-## 7. MVP bắt buộc (P0) — checklist rút gọn cho deadline 30h
+## 7. Checklist P0 — ưu tiên hàng đầu trong deadline 48h
 **Identity:** FR-01, FR-02
 **Projects:** FR-10, FR-11, FR-12, FR-13
 **Pipeline:** FR-20, FR-21, FR-22, FR-23, FR-24, FR-26, FR-28, FR-29, FR-30, FR-32, FR-33

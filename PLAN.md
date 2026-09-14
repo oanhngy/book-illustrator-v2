@@ -30,7 +30,7 @@ Vì sao gộp architecture + data model + API contract vào một file `03-desig
 
 **1. Spec trước, code sau.** Không gõ dòng code nào cho một tính năng chưa được mô tả trong `docs/`.
 
-**2. Học on-the-go (just-in-time learning).** Deadline 30h không thể áp dụng hoàn toàn, chỉ áp dụng cho những khái niệm thực sự khó/mới. Không học trước cả một cuốn sách. Gặp chỗ không biết thì dừng lại, học **đúng phần đó**, rồi quay lại code. Vòng lặp:
+**2. Học on-the-go (just-in-time learning).** Deadline 48h không thể áp dụng hoàn toàn, chỉ áp dụng cho những khái niệm thực sự khó/mới. Không học trước cả một cuốn sách. Gặp chỗ không biết thì dừng lại, học **đúng phần đó**, rồi quay lại code. Vòng lặp:
 
 ```
 Gặp thứ không biết
@@ -134,15 +134,13 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 - [x] Dựng thư mục `data/` theo phần B của `docs/03-design.md`.
 - [x] `JsonStore`: `ReadAsync<T>(path)`, `WriteAsync<T>(path, value)` — ghi atomic.
 - [x] `ProjectStore`: `GetAsync(id)`, `ListByUserAsync(email)`, `SaveAsync(project)`, và quan trọng nhất `UpdateAsync(id, Func<Project, bool> mutate)` — đọc-sửa-ghi **bên trong lock**.
-
-> Test tự động cho concurrency của storage layer (50 update song song) dời sang Phase 10 —
-> viết trong lúc dựng MVP làm chậm tiến độ 30h; dồn hết automated test vào đợt testing riêng.
+- [ ] Test: hai lời gọi `UpdateAsync` song song không được làm mất update của nhau
 
 **Decision:** khóa theo project (DECISIONS.md ##6). Path dùng userKey (slug+hash) (DECISIONS ##2.2)
 
-**DoD:** giải thích lại được vì sao `SemaphoreSlim` theo project + atomic write (tmp + rename) chống được mất update khi nhiều request cùng lúc — không cần test tự động ở phase này.
+**DoD:** viết được một test chạy 50 update song song lên cùng một project, kết quả cuối vẫn đúng.
 
-**Commit:** `feat: json file store with atomic writes` · `feat: per-project write lock`
+**Commit:** `feat: json file store with atomic writes` · `feat: per-project write lock` · `test: concurrent updates keep every write`
 
 ---
 
@@ -153,9 +151,9 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 **Cần học:** Minimal API binding, `Results.*`, validation thủ công, đọc file upload `.txt`.
 
 **Việc cần làm:**
-- [ ] `POST /api/auth` — email tồn tại thì trả về, chưa có thì tạo.
-- [ ] `POST /api/projects`, `GET /api/projects`, `GET /api/projects/{id}`.
-- [ ] Nhận diện user theo quyết định ở Phase 1 — ghi rõ đây **không phải** cơ chế bảo mật thật.
+- [x] `POST /api/auth` — email tồn tại thì trả về, chưa có thì tạo.
+- [x] `POST /api/projects`, `GET /api/projects`, `GET /api/projects/{id}`.
+- [x] Nhận diện user theo quyết định ở Phase 1 — ghi rõ đây **không phải** cơ chế bảo mật thật.
 - [ ] Chặn user A đọc project của user B.
 
 **DoD:** dùng curl/Postman tạo được project, restart server, vẫn liệt kê được đủ.
@@ -196,9 +194,9 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 - [ ] Claim bước: chỉ được chạy step N khi `completedSteps == N-1` và không có step nào đang chạy — kiểm tra **bên trong lock**.
 - [ ] Lỗi → lưu `lastError` + `failedStep`, project vẫn dùng được.
 
-**DoD:** double-click nút Run chỉ tạo đúng **một** lời gọi Gemini — tự tay verify qua tab Network (1 request `202`, request thứ hai `409`). Test tự động cho hành vi này dời sang Phase 10.
+**DoD:** double-click nút Run chỉ tạo đúng **một** lời gọi Gemini. Chứng minh bằng test.
 
-**Commit:** `feat: run style step` · `feat: characters step with server-side cap`
+**Commit:** `feat: run style step` · `feat: characters step with server-side cap` · `test: duplicate run requests are rejected`
 
 ---
 
@@ -232,9 +230,9 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 
 **Decision:** ngưỡng "treo" là bao nhiêu phút? Ai phát hiện — server khi đọc, hay user bấm nút force?
 
-**DoD:** viết ra được 5 kịch bản hỏng, tự tay verify ít nhất 3 kịch bản. Test tự động cho các kịch bản này dời sang Phase 10.
+**DoD:** viết ra được 5 kịch bản hỏng và test tự động cho ít nhất 3 kịch bản.
 
-**Commit:** `feat: stale step recovery`
+**Commit:** `feat: stale step recovery` · `test: pipeline resumes after restart`
 
 ---
 
@@ -261,9 +259,7 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 
 ## Phase 10 — Test cả hai phía
 
-> Trọng tâm của dự án (`CLAUDE.md §0`) — đầu tư kỹ nhất ở đây, không tính trong deadline 30h của Phase 2-9.
-
-**Cần học:** `WebApplicationFactory` (integration test cho Minimal API); Vitest + React Testing Library; viết test case/test plan/bug report thủ công.
+**Cần học:** `WebApplicationFactory` (integration test cho Minimal API); Vitest + React Testing Library.
 
 **Tầng 1 — Unit test `PipelineService` (xUnit + Moq).** Tầng quan trọng nhất. Mock `IGeminiClient`; dùng `ProjectStore` **thật** trỏ vào thư mục `data/` tạm, không mock Store (xem lý do ở `DECISIONS.md`). Tối thiểu 5-7 test:
 - [ ] Bước đã `Completed` thì không gọi lại — `mockGemini.Verify(x => x.GenerateStyle(...), Times.Never())`.
@@ -271,28 +267,20 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 - [ ] Resume theo item — 3 nhân vật, 2 portrait đã xong → assert đúng 1 lần gọi sinh ảnh cho nhân vật còn thiếu (dựa vào `images[]`, xem `docs/03-design.md` B3).
 - [ ] Lỗi được ghi lại chứ không ném ra — mock throw → assert `failedStep`/`lastError` đúng, kết quả bước trước vẫn nguyên.
 - [ ] Chặn chạy trùng — bước đang `Running` → request thứ hai bị từ chối.
-- [ ] Concurrency storage layer — 50 `ProjectStore.UpdateAsync` song song lên cùng 1 project → không mất update nào (dời từ Phase 3).
 
 **Tầng 2 — Integration test bằng `WebApplicationFactory`,** inject `FakeGeminiClient`, gọi endpoint thật. 3-4 test: tạo project, chạy pipeline, đọc status.
-- [ ] Double-click Run — 2 request `POST .../steps/{step}/run` gửi đồng thời → đúng 1 cái `202`, cái còn lại `409` (dời từ Phase 6).
-- [ ] Resume/stale — dựng project ở trạng thái stale (`runningSince` quá ngưỡng), gọi lại → hành vi đúng như đã verify tay ở Phase 8 (dời từ Phase 8).
 
 **Tầng 3 — FE test bằng Vitest + React Testing Library,** 3-4 test vào chỗ có logic: stepper render đúng status, form tạo project chặn text rỗng, polling dừng khi pipeline xong.
 
 **E2E/Playwright:** không làm ở bản đầu — ghi ở `README.md` như nice-to-have, chưa quyết định làm.
 
-**Test case thủ công (bắt buộc cho mục tiêu CV Tester):**
-- [ ] Viết test plan: phạm vi, chiến lược, môi trường test.
-- [ ] Viết test case cho luồng chính + luồng lỗi (bảng: ID, bước, input, expected, actual, pass/fail).
-- [ ] Chạy tay ít nhất 1 lượt đầy đủ, ghi bug report mẫu nếu tìm thấy lỗi (kể cả lỗi cố ý tạo ra để có mẫu thật).
-
 **Việc cần làm khác:**
 - [ ] `test.sh` chạy cả hai bằng một lệnh.
 - [ ] **Tạo và viết `TESTING.md`**: test gì, **cố ý không test gì và tại sao**, kèm output của một lần chạy thật.
 
-**DoD:** `./test.sh` xanh trên máy sạch; có bộ test case thủ công đọc được, không chỉ code test.
+**DoD:** `./test.sh` xanh trên máy sạch.
 
-**Commit:** `test: backend pipeline suite` · `test: frontend component states` · `docs: testing strategy` · `docs: manual test plan and case`
+**Commit:** `test: backend pipeline suite` · `test: frontend component states` · `docs: testing strategy`
 
 ---
 
