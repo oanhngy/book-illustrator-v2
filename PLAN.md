@@ -134,13 +134,14 @@ Giải thích lại cho Claude nghe → nếu ú ớ nghĩa là chưa hiểu, qu
 - [x] Dựng thư mục `data/` theo phần B của `docs/03-design.md`.
 - [x] `JsonStore`: `ReadAsync<T>(path)`, `WriteAsync<T>(path, value)` — ghi atomic.
 - [x] `ProjectStore`: `GetAsync(id)`, `ListByUserAsync(email)`, `SaveAsync(project)`, và quan trọng nhất `UpdateAsync(id, Func<Project, bool> mutate)` — đọc-sửa-ghi **bên trong lock**.
-- [ ] Test: hai lời gọi `UpdateAsync` song song không được làm mất update của nhau
+- [x] Test: hai lời gọi `UpdateAsync` song song không được làm mất update của nhau
 
 **Decision:** khóa theo project (DECISIONS.md ##6). Path dùng userKey (slug+hash) (DECISIONS ##2.2)
 
 **DoD:** viết được một test chạy 50 update song song lên cùng một project, kết quả cuối vẫn đúng.
 
-**Commit:** `feat: json file store with atomic writes` · `feat: per-project write lock` · `test: concurrent updates keep every write`
+**Commit:** `feat: json file store with atomic writes` · `feat: per-project write lock` · `test: concurrent updates kee
+p every write`
 
 ---
 
