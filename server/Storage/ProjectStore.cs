@@ -18,8 +18,10 @@ public class ProjectStore
     //3. lock theo từng proj
     private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> Locks=new();
     private string PathFor(Guid id) => Path.Combine(_projectsDir, $"{id}.json");
+    
     //lấy semaphore của đúng proj, tạo nếu chưa có
     private static SemaphoreSlim LockFor(Guid id) => Locks.GetOrAdd(id, _ => new SemaphoreSlim(1,1));
+    
     //đọc 1 proj theo id, null nếu k tồn tại
     public Task<Project?> GetAsync(Guid id) => JsonStore.ReadAsync<Project>(PathFor(id));
 
@@ -70,6 +72,32 @@ public class ProjectStore
         {
             semaphore.Release(); //luôn nhả lock
         }
+    }
 
+    //TÁCH RIÊNG BOOK.TXT RA KHỎI PROJECT.JSON
+    //method thuần, k I/O, only ghép chuỗi ra link data/projects/{id}.book.txt
+    //private, only 2 method dưới xài
+    private string BookTextPathFor(Guid id) => Path.Combine(_projectsDir, $"{id}.book.txt");
+
+    //2 hàm= follow Dependency rule A3 (layer trên chỉ kêu làm gì, k biết cách làm, cái đó layer dưới lo) bằng cách che cách lưu trư thật khỏi tầng gọi nó(ProjectEndpoints), ProjectEndpoints chỉ cần biết lưu bookText cho proj này
+    public async Task SaveBookTextAsync(Guid id, string bookText)
+    {
+        var path=BookTextPathFor(id);
+        var directory=Path.GetDirectoryName(path);
+        if(!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        //atomic write như JsonStore dù k phải JSON
+        var tempPath=path+".tmp";
+        await File.WriteAllTextAsync(tempPath, bookText);
+        File.Move(tempPath, path, overwrite:true);
+    }
+
+    public async Task<string?> GetBookTextAsync(Guid id)
+    {
+        var path=BookTextPathFor(id);
+        return File.Exists(path) ? await File.ReadAllTextAsync(path):null;
     }
 }

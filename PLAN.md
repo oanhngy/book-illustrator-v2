@@ -153,9 +153,9 @@ p every write`
 
 **Việc cần làm:**
 - [x] `POST /api/auth` — email tồn tại thì trả về, chưa có thì tạo.
-- [x] `POST /api/projects`, `GET /api/projects`, `GET /api/projects/{id}`.
+- [ ] `POST /api/projects`, `GET /api/projects`, `GET /api/projects/{id}`.
 - [x] Nhận diện user theo quyết định ở Phase 1 — ghi rõ đây **không phải** cơ chế bảo mật thật.
-- [ ] Chặn user A đọc project của user B.
+- [x] Chặn user A đọc project của user B.
 
 **DoD:** dùng curl/Postman tạo được project, restart server, vẫn liệt kê được đủ.
 
