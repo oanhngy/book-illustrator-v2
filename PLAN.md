@@ -153,7 +153,7 @@ p every write`
 
 **Việc cần làm:**
 - [x] `POST /api/auth` — email tồn tại thì trả về, chưa có thì tạo.
-- [ ] `POST /api/projects`, `GET /api/projects`, `GET /api/projects/{id}`.
+- [x] `POST /api/projects`, `GET /api/projects`, `GET /api/projects/{id}`.
 - [x] Nhận diện user theo quyết định ở Phase 1 — ghi rõ đây **không phải** cơ chế bảo mật thật.
 - [x] Chặn user A đọc project của user B.
 
@@ -165,12 +165,10 @@ p every write`
 
 ## Phase 5 — Tầng Gemini + fake client
 
-> Làm fake **trước** khi làm thật (tránh đốt token)
-
 **Cần học:** `HttpClient` / `IHttpClientFactory`, typed client; đọc REST doc của Gemini; structured output bằng JSON schema; nối ngữ cảnh giữa các lượt gọi.
 
 **Việc cần làm:**
-- [ ] `IGeminiClient` với 2 method: sinh JSON có schema, sinh ảnh.
+- [ ] `IGeminiClient` với 3 method: sinh JSON có schema, sinh ảnh, upload book.txt lên Gemini File API (xem `DECISIONS.md` ##11).
 - [ ] `FakeGeminiClient` đọc từ `fixtures/*.json`.
 - [ ] `GeminiClient` thật, gọi REST, đọc API key từ biến môi trường.
 - [ ] Cờ `USE_FAKE_GEMINI` để chọn implementation lúc đăng ký DI.

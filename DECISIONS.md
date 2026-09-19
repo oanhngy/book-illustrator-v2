@@ -164,7 +164,120 @@ Cả hai đều thoả FR-23 **nếu** state được persist trước khi chạ
 **Xem lại khi** Khi cần lưu thêm thông tin per-item khác mà không suy luận được từ images[]
 
 ---
-## 10.
+## 10. IGeminiClient trả về kiểu gì cho caller
+**Người đề xuất** Claude
+**Bối cảnh** Trước khi bắt đầu Phase 5 cần đưa ra quyết định. Khi PipelineService gọi IGeminiClient.GenerateJsonAsync(), cần nhận lại gì để (1) đọc được dữ liệu JSON đã parse, (2) lấy được interaction.id để truyền vào previousInteractionId cho bước sau
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. DTO riêng (GeminiJsonResult, GeminiImageResult) | Che giấu hoàn toàn chi tiết giao thức, PipelineSer chỉ nhận data đã bóc tách sạch, code nghiệp vụ dể đọc | Cần thêm bước định nghĩa class/record DTO ở phase 5, cần viết logic chuyển đổi từ HTTP Response sang DTO trong client thật |
+| B. HTTP thô | Không cần DTO, không map | Phá ranh giới kiến trúc: Tầng PipelineSer bị dính chặt vào System.Net.Http, logic parse JSON phân tán khắp pipeline; FakeGeminiClient phải dựng đúng cấu trúc JSON/object mà Gemini SDK trả về | 
+
+**Chốt** A. DTO riêng
+**Trade-offs**
+    - DoD Phase 5 quy định: bật USE_FAKE_GEMINI=true, ứng dụng phải chạy trơn tru mà không mạng + API Key --> cách A phù hợp
+    - Chấp nhận phải viết thêm class/record DTO khi dùng DTO riêng, cái giá thấp hơn việc PipelineSer phụ thuộc vào hình dạng response của Gemini + dựng cấu trúc JSON mà Gemini SDK trả về --> code nhiều hơn nhưng không phá kiến trúc
+**Xem lại khi** Không cần
+
+---
+## 11. Xác định việc upload file sách (book.txt --> book.uri) có phải là method của IGeminiClient
+**Người đề xuất** Claude
+**Bối cảnh** Bước 1 pipeline cần gọi Gemini API để đẩy book.txt lên Gemini File API, nhận về book.uri, chỉ gọi 1 lần duy nhất khi project bắt đầu
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. Thêm method thứ 3 vào IGeminiClient | Tập trung một đầu mối: mọi Http tới Gemini API đều quy về 1 interface, code ở Pipeline trực quan | FakeGeminiClient cần giả lập trả uri giả |
+| B. Tách thành Service riêng | Tuân thủ ISP, mock/test độc lập | Tăng lượng interface và class trong DI container |
+| C. Xử lý nội bộ trong GeminiClient thật | Giấu kín cơ chế khỏi Pipeline | Xử lý nội bộ trong GeminiClient thật --> Không lấy được book.uri để persist, vi phạm FR-23 |
+**Chốt** A. Thêm method thứ 3 vào IGeminiClient
+**Trade-offs**
+    - Chấp nhận viết lại docs cho phù hợp (docs hiện ghi 2 method trong IGeminiClient) để những thứ liên quan nằm cùng 1 chỗ, tiện logic
+    - DoD quy định USE_FAKE_GEMINI=true, FakeGeminiClient chỉ cần return chuỗi giả định, không tốn quota --> Cách A phù hợp DoD + cost thấp hơn các cách khác
+**Xem lại khi** Không cần
+
+---
+## 12. Xác định InteractionID là tham số riêng hay gom vào GeminiRequest object
+**Người đề xuất** Claude
+**Bối cảnh** Các bước chạy pipeline cần xâu chuỗi ngữ cảnh, khi gọi AI, ngoài prompt và previousInteractionId còn cần Model name, system instruction, JSON schema. Cần thiết kế chữ ký phương thức bền vững
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. Tách riêng | Các hàm trực quan, nhìn interface thấy được tham số | Khi cần chỉnh tham số --> chũ ký vỡ, phải sửa IGeminiClient, GeminiClient, FakeGeminiClient và tất cả mock test |
+| B. Gom vào Request object | Tuân thủ Open/Closed Principle: bổ. sung cấu hình mới chỉ cần thêm property vào object mà không đổi chữ ký | Cần tạo thêm class/record Request; thêm 1 lớp trừu tượng cho thứ hiện tại chỉ có 3 field |
+
+**Chốt** B. Gom vào Request object
+**Trade-offs**
+    - 2 method cũa IGeminiClient có cấu trúc dữ liệu đầu vào khác biệt --> có Request object chuyên biệt giúp tách bạch cấu hình, chữ ký gọn, bất biến với các thay đổi sau này
+    - chấp nhận over-engineering đổi lấy việc tuân thủ principle và không phải thay đổi
+**Xem lại khi** Không cần
+
+---
+## 13. Biểu diễn con trỏ ngữ cảnh trong Project model
+**Người đề xuất** Claude
+**Bối cảnh** Pipeline cần min 3 con trỏ độc lập(dual-thread docs/02-pipeline.md), hiện Project.cs chỉ có 1 field là ContextRef. Cần:
+- book.uri
+- last_interaction.id
+- last_image_interaction.id
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. 3 field phẳng riêng biệt | Nhất quán triết lý phẳng từ ##2.1, đọc trực tiếp field nào chứa gì | Project.cs có 3 field thay vì 1 |
+| B. Đổi ContextRef thành object lồng ContextRefs | Gom 3 giá trị liên quan vào 1 khối, dễ thêm con trỏ thứ 4 (nếu có) | Lệch hẳn field hiện có, thêm 1 class lồng cho đúng 3 giá trị --> thừa với right-sizing |
+**Chốt** A. 3 field phẳng riêng biệt
+**Trade-offs**
+    - Nhất quán triết lý phẳng, không tạo thêm tầng lồng cho chỉ 3 giá trị --> phù hợp yêu cầu right-sizing
+**Xem lại khi** Có thêm con trỏ thứ 4 --> option B đáng làm hơn
+
+---
+## 14. Thiết kế Request Object cho IGeminiClient
+**Người đề xuất** Claude
+**Bối cảnh**
+- GenerateJsonAsync cần {Model, Prompt, PreviousInteractionId, Schema}
+- GenerateImageAsync cần {Model, Prompt, PreviousInteractionId}
+--> 3 field chung, 1 field Schema chỉ JSON cần
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. 1 class duy nhất | Độ phức tạp thấp, không trùng lặp code | Nguy cơ bug cao, lỗi chỉ phát hiện ở runtime |
+| B. Kế thừa | Độ an toàn cao, không trùng lặp, dễ mở rộng | Phải xủ lý cú pháp kế thừa, tăng độ sâu của dữ liệu | 
+| C. 2 class độc lập | Độ an toàn cao, độ phức tạp thấp | Trùng lặp khi Model, Prompt, PreviousInteractionId viết ở cả 2 class; phải sửa 2 nơi khi cần thêm field mới dùng chung |
+**Chốt** C. 2 class độc lập
+**Trade-offs**
+    - Ưu điểm như cách B nhưng độ phức tạp thấp hơn, chấp nhận việc trùng lặp --> phù hợp right-sizing
+    - Dự án chỉ 2 loại cần gọi API --> Khả năng không cao xuất hiện thêm class mới
+    - SystemInstructions không phải field của GeminiJsonRequest/GeminiImageRequest vì nó không đổi giữa các lần gọi --> đặt ở cấu hình khởi tạo GeminiClient (contructor/DI), không lặp lại mỗi request
+**Xem lại khi** Khi xuất hiện thêm class thứ 3
+
+
+<!--
+| Cách | Được | Mất |
+|---|---|---|
+| A. GeminiImageResult chứa danh sách ảnh, để PipelineService tự chọn | Không mất thông tin, linh hoạt nếu sau này cần dùng nhiều ảnh | PipelineService phải biết luật "lấy ảnh cuối" — logic nghiệp vụ của Gemini bị lộ ra ngoài tầng client |
+| B. GeminiImageResult chỉ chứa đúng 1 ảnh, GeminiClient tự lọc lấy ảnh cuối trước khi trả về | PipelineService không cần biết Gemini có thể trả nhiều ảnh — đúng vai trò IGeminiClient là che giấu chi tiết giao thức (nhất quán với lý do chọn DTO riêng ở ##10) | Nếu sau này thật sự cần dùng ảnh khác ngoài "ảnh cuối", phải sửa GeminiClient |
+**Chốt** B. GeminiImageResult chỉ chứa 1 ảnh
+**Trade-offs**
+    - Nhất quán với ##10: IGeminiClient che giấu chi tiết giao thức, PipelineService chỉ nhận dữ liệu sạch
+    - "Lấy ảnh cuối" là luật riêng của Gemini, không phải nghiệp vụ pipeline — thuộc về GeminiClient, không thuộc PipelineService
+**Xem lại khi** Khi có yêu cầu thật sự cần nhiều hơn 1 ảnh mỗi lần generate
+-->
+
+---
+## 15. GenerateImageAsync trả về 1 ảnh hay danh sách ảnh
+**Người đề xuất** docs/02-pipeline đưa ra vấn đề
+**Bối cảnh** GenerateImageAsync nằm trong IGeminiClient (phase 5 thực hiện), cần quyết định trả nhiều hay 1 ảnh trong GeminiImageResult
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. Chứa danh sách ảnh, để PipelineService tự chọn | Không mất thông tin, linh hoạt nếu sau này cần dùng nhiều ảnh | PipelineService biết luật "lấy ảnh cuối" ==> Logic nghiệp vụ của Gemini bị lộ ngoài tầng client |
+| B. Chỉ chứa 1 ảnh, GeminiClient tự lọc lấy ảnh cuối trước khi trả về | IGeminiClient che giao thức, nhất quán với lý do chọn DTO riêng ở ##10; Pipeline không biết về trả ảnh | Sau này cần dùng ảnh khác ngoài "ảnh cuối" --> sửa GeminiClient |
+**Chốt** B. Chỉ chứa 1 ảnh
+**Trade-offs**
+    - Nhất quán với ##10: IGeminiClient giấu giao thức chi tiết, PipelineService chỉ nhận dữ liệu sạch
+    - "Lấy ảnh cuối"=luật riêng của Gemini, không phải nghiệp vụ pipeline --> để GeminiClient xử lý
+**Xem lại khi** Có yêu cầu cần nhiều hơn 1 ảnh mỗi khi generate
+
+---
+## 16. 
 **Người đề xuất**
 **Bối cảnh** 
 **Options**

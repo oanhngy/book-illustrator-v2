@@ -160,7 +160,9 @@ Trade-offs ở `DECISIONS.md` ##2
   "failedStep": null,
   "lastError": null,
 
-  "contextRef": "…",
+  "bookUri": "…",
+  "textInteractionId": "…",
+  "imageInteractionId": "…",
 
   "style": "watercolour, soft edges, warm palette",
   "characters": [ { "name": "Mole", "imagePrompt": "…" } ],
