@@ -248,19 +248,6 @@ Cả hai đều thoả FR-23 **nếu** state được persist trước khi chạ
     - SystemInstructions không phải field của GeminiJsonRequest/GeminiImageRequest vì nó không đổi giữa các lần gọi --> đặt ở cấu hình khởi tạo GeminiClient (contructor/DI), không lặp lại mỗi request
 **Xem lại khi** Khi xuất hiện thêm class thứ 3
 
-
-<!--
-| Cách | Được | Mất |
-|---|---|---|
-| A. GeminiImageResult chứa danh sách ảnh, để PipelineService tự chọn | Không mất thông tin, linh hoạt nếu sau này cần dùng nhiều ảnh | PipelineService phải biết luật "lấy ảnh cuối" — logic nghiệp vụ của Gemini bị lộ ra ngoài tầng client |
-| B. GeminiImageResult chỉ chứa đúng 1 ảnh, GeminiClient tự lọc lấy ảnh cuối trước khi trả về | PipelineService không cần biết Gemini có thể trả nhiều ảnh — đúng vai trò IGeminiClient là che giấu chi tiết giao thức (nhất quán với lý do chọn DTO riêng ở ##10) | Nếu sau này thật sự cần dùng ảnh khác ngoài "ảnh cuối", phải sửa GeminiClient |
-**Chốt** B. GeminiImageResult chỉ chứa 1 ảnh
-**Trade-offs**
-    - Nhất quán với ##10: IGeminiClient che giấu chi tiết giao thức, PipelineService chỉ nhận dữ liệu sạch
-    - "Lấy ảnh cuối" là luật riêng của Gemini, không phải nghiệp vụ pipeline — thuộc về GeminiClient, không thuộc PipelineService
-**Xem lại khi** Khi có yêu cầu thật sự cần nhiều hơn 1 ảnh mỗi lần generate
--->
-
 ---
 ## 15. GenerateImageAsync trả về 1 ảnh hay danh sách ảnh
 **Người đề xuất** docs/02-pipeline đưa ra vấn đề

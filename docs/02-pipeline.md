@@ -51,6 +51,7 @@ each step have belowed content:
 **4.2 portrait image generate**
 - endpoint: client.interactions.create() loop qua từng characters
 - send: tham số bên trong hàm trên chứa biến model, input(prompt), previous_interaction_id
+(*)previous_interaction_id: lần lặp ĐẦU TIÊN (portrait nhân vật thứ 1) = id của 4.1 (text) — đây là điểm duy nhất 2 thread giao nhau. Từ nhân vật thứ 2 trở đi = id của lần portrait ngay trước đó (ảnh-->ảnh, không quay lại text nữa)
 - receive: generate_image chứa ảnh Gemini đã tạo (nếu có ảnh được tạo), biến last_image_interaction=characters_image_interaction chứa lịch sử chat
 - nối bước sau=last_image_interaction
 - prompt: nằm trong hàm client.interactions.create
@@ -105,6 +106,7 @@ each step have belowed content:
 - Bước 5 dùng lại portrait để nhân vật nhất quán bằng cách nào? Kết hợp Kiến trúc Luồng kép(Dual-Thread):
    - Text: 5.1 nối previous_interaction_id của 4.1 --> Gemini nhớ chính xác mô tả=text của characters đã chốt ở 4.1
    - Image: 5.2 tiếp previous_interaction_id (last_image_interaction.id) của 4.2
+   - Điểm giao nhau duy nhất giữa 2 thread: lần gọi ảnh đầu tiên (4.2) dùng previous_interaction_id=id cửa 4.1 để Gemini nhớ mô tả nhân vật đã chốt. Sau lần đó, thread ảnh tự chạy bằng id nó có
 
 **Cạm bẫy đã biết từ bản cũ — xác minh lại rồi ghi kết luận:**
 
