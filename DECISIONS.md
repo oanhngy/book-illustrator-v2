@@ -246,6 +246,10 @@ Cả hai đều thoả FR-23 **nếu** state được persist trước khi chạ
     - Ưu điểm như cách B nhưng độ phức tạp thấp hơn, chấp nhận việc trùng lặp --> phù hợp right-sizing
     - Dự án chỉ 2 loại cần gọi API --> Khả năng không cao xuất hiện thêm class mới
     - SystemInstructions không phải field của GeminiJsonRequest/GeminiImageRequest vì nó không đổi giữa các lần gọi --> đặt ở cấu hình khởi tạo GeminiClient (contructor/DI), không lặp lại mỗi request
+    - Lượt gọi đầu tiên (PreviousInteractionId=null, Style) PHẢI đính sách vào input dạn document --> GeminiJsonRequest thêm BookUri (string?) + chỉ điền lượt đầu, sau đó null
+    - Bỏ cách GeminiClient tự nhớ book.uri sau UploadBookAsync
+    - Chấp nhận việc: BookUri null ở các lượt sau, PipelineService chịu trách nhiệm điền 1st (Style). GeminiImageRequest không có BookUri vì mọi lượt ảnh đều nối từ chuỗi đã có sách
+
 **Xem lại khi** Khi xuất hiện thêm class thứ 3
 
 ---
@@ -264,15 +268,21 @@ Cả hai đều thoả FR-23 **nếu** state được persist trước khi chạ
 **Xem lại khi** Có yêu cầu cần nhiều hơn 1 ảnh mỗi khi generate
 
 ---
-## 16. 
-**Người đề xuất**
-**Bối cảnh** 
+## 16. Chọn Interactions API hay generateContent
+**Người đề xuất** Claude đối chiếu docs/api-docs.md vs tài liệu Gemini chính thức
+**Bối cảnh** ##10-15 dựa trên previousInteractionsId, generateContent là stateless --> không id để nối
 **Options**
 | Cách | Được | Mất |
 |---|---|---|
-**Chốt**
+| A. Interactions API | Giữ nguyên ##10-15 + Fake, test, Project.cs, đúng notebook | API mới (schema đổi); interaction lưu có hạn free 1 day |
+| B. generateContent + GeminiClient tự giữ history theo id tự tạo | Giữ interface | RAM mất khi restart (violate FR-23), persist thì thêm 1 tầng lưu, id là fake |
+| C. generateContent stateless, prompt tự chứa | Resume miễn phí (style/characters/hình đã có ở project.json), k phụ thuộc retention | Sửa interface + DECISION 10, 12, 14, 15 + Fake + test, gửi lại sách mỗi lượt tốn token, tính nhất quán=cách truyền lại ảnh, không phải "Gemini nhớ được" |
+**Chốt** A. Interactions API
 **Trade-offs**
-**Xem lại khi**
+    - Giữa nguyên code Phase 5 đã có
+    - Resume sau hết hạn, cần dựng lại ngữ cảnh --> Task Phase 8
+    - Chưa xác nhận nối text-->ảnh work, bản cũ từng lỗi khi nối --> Check=gọi API thật ở task 5
+**Xem lại khi** Bị lỗi khi gọi thật hoặc retention 1 ngày làm resume không dùng được 
 
 ---
 ## Cần có ít nhất các mục sau

@@ -8,6 +8,7 @@ public class GeminiJsonRequest
     public required string Prompt {get; set;}
     public string? PreviousInteractionId {get; set;} //null=thread mới
     public required JsonElement Schema {get; set;} //Json schema thô trả định dạng dữ liệu trả về
+    public string? BookUri {get; set;} //decision ##14: chỉ điền ở lượt đầu (PreviousInteractionId==null), các lượt sau null
 }
 
 public class GeminiImageRequest
