@@ -1,6 +1,8 @@
 {
   "characters": [
-    { "name": "Mole", "imagePrompt": "A small, gentle mole with soft grey fur, round spectacles, wearing a tweed waistcoat, warm and curious expression, watercolour style" },
-    { "name": "Ratty", "imagePrompt": "A dapper water rat with sleek brown fur, wearing a boater hat and striped blazer, confident posture, watercolour style" }
+    {
+      "name": "Mole",
+      "imagePrompt": "A gentle, anthropomorphic mole with velvety black fur that is lightly smudged with white streaks of dried plaster and dust. He has a small, round, wet nose, sensitive whiskers, and expressive, blinking eyes. He is wearing a tiny, makeshift apron over his stout frame, appearing weary but industrious. The character is set within a cozy, dimly lit burrow filled with soft, warm earth tones, capturing his exhaustion after a long morning of spring cleaning. The overall aesthetic follows a whimsical, neo-impressionist watercolor style, featuring vibrant, sun-drenched palette accents, soft-focus textures, and loose, gestural brushstrokes that emphasize his charming, tired posture."
+    }
   ]
 }

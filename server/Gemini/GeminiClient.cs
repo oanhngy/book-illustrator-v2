@@ -6,7 +6,7 @@ namespace server.Gemini;
 
 public class GeminiClient : IGeminiClient
 {
-    private const string ImageMimeType="image/png";
+    private const string ImageMimeType="image/jpeg"; // Gemini báo "image/png" bị từ chối 400
     private const string ImageAspectRatio="3:4";
     private readonly HttpClient _http;
     private readonly GeminiOptions _options;
@@ -42,6 +42,8 @@ public class GeminiClient : IGeminiClient
         uploadRequest.Headers.TryAddWithoutValidation("X-Goog-Upload-Offset", "0");
         uploadRequest.Headers.TryAddWithoutValidation("X-Goog-Upload-Command", "upload, finalize");
         uploadRequest.Content=new ByteArrayContent(bytes); //raw bytes k bọc json wrapper
+        //TESTING
+        uploadRequest.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
 
         using var uploadResponse=await SendAsync(uploadRequest);
         var root=await ReadJsonAsync(uploadResponse);
@@ -57,10 +59,12 @@ public class GeminiClient : IGeminiClient
 
     public async Task<GeminiJsonResult> GenerateJsonAsync(GeminiJsonRequest request)
     {
-        // LƯỢT ĐẦU k có book thì báo lỗi ngay, k gửi request
-        if(request.PreviousInteractionId==null && request.BookUri==null)
-            throw new ArgumentException("First JSON (PreviousInteractionId==null must have BookUri");
-    
+        // Bỏ check "lượt đầu bắt buộc có BookUri": giả định cũ sai, vì document+uri (Files API)
+        // đang gặp lỗi backend Gemini (xem docs/api-docs.md mục 1 — "blobstore" issue), nên lượt
+        // đầu giờ có thể đưa sách vào bằng BookUri HOẶC nhét thẳng vào Prompt (inline, như v1 cũ
+        // đã làm). Code không biết Prompt có chứa sách hay không nên không validate được nữa —
+        // trách nhiệm đảm bảo lượt đầu có ngữ cảnh sách giờ thuộc về caller (PipelineService).
+
         //input: sách(lượt đầu only, BookUri null các lượt sau)+prompt
         var input=new JsonArray();
         if(request.BookUri != null)

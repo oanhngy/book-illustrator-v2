@@ -168,13 +168,13 @@ p every write`
 **Cần học:** `HttpClient` / `IHttpClientFactory`, typed client; đọc REST doc của Gemini; structured output bằng JSON schema; nối ngữ cảnh giữa các lượt gọi.
 
 **Việc cần làm:**
-- [ ] `IGeminiClient` với 3 method: sinh JSON có schema, sinh ảnh, upload book.txt lên Gemini File API (xem `DECISIONS.md` ##11).
-- [ ] `FakeGeminiClient` đọc từ `fixtures/*.json`.
-- [ ] `GeminiClient` thật, gọi REST, đọc API key từ biến môi trường.
-- [ ] Cờ `USE_FAKE_GEMINI` để chọn implementation lúc đăng ký DI.
+- [x] `IGeminiClient` với 3 method: sinh JSON có schema, sinh ảnh, upload book.txt lên Gemini File API (xem `DECISIONS.md` ##11).
+- [x] `FakeGeminiClient` đọc từ `fixtures/*.json`.
+- [x] `GeminiClient` thật, gọi REST, đọc API key từ biến môi trường.
+- [x] Cờ `USE_FAKE_GEMINI` để chọn implementation lúc đăng ký DI.
 - [ ] Gọi thật **một lần** cho mỗi loại, lưu response làm fixture.
 
-**Decision:** interface trả về kiểu riêng của mình (`GeminiJsonResult`) hay kiểu HTTP thô? (Kiểu riêng — nếu không, fake phải giả lập cả tầng HTTP.)
+**Decision:** interface trả về kiểu riêng của mình (`GeminiJsonResult`) để fake không phải giả lập cả tầng HTTP
 
 **DoD:** với `USE_FAKE_GEMINI=true`, toàn bộ app chạy được mà không cần API key.
 

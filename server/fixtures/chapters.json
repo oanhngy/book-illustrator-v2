@@ -1,9 +1,24 @@
 {
   "chapters": [
     {
-      "title": "The River Bank",
-      "summary": "Mole abandons his spring cleaning to explore the riverbank and meets Ratty, who introduces him to the joys of boating.",
-      "imagePrompt": "Mole and Ratty sitting together in a small rowboat on a sunlit river, reeds along the bank, watercolour style"
+      "title": "Chapter 1: The River Bank",
+      "summary": "Mole abandons his spring cleaning, leaves his burrow, and discovers the beauty of the river, where he meets the Water Rat.",
+      "imagePrompt": "A gentle, anthropomorphic mole with velvety black fur covered in faint white dust splatters, standing on a lush, green riverbank. Beside him sits a sleek, friendly Water Rat in a colorful vest, gesturing toward a small, bright blue wooden boat rocking gently on the sparkling water. The scene is bathed in a warm, golden sunlight. Whimsical, neo-impressionist watercolor style, featuring soft-focus textures, loose gestural brushstrokes, and a vibrant, uplifting palette of emerald, azure, and gold, capturing the peaceful joy of a spring day by the water."
+    },
+    {
+      "title": "Chapter 2: The Open Road",
+      "summary": "Rat and Mole go to visit the Toad at Toad Hall, leading to an adventure involving a flashy, reckless motorcar.",
+      "imagePrompt": "A boisterous, anthropomorphic Toad wearing an extravagant, oversized tweed motoring coat and goggles, standing proudly next to a vibrant, polished vintage motorcar. Nearby, a weary Mole in his work-worn clothes and a calm, observant Water Rat look on with expressions of shock and curiosity. The background features the grand, sprawling garden of Toad Hall under a bright, clear sky. Whimsical, neo-impressionist watercolor style, with loose, expressive brushstrokes, dynamic color splashes of deep reds and bright greens, and a sun-drenched, airy atmosphere that highlights the chaotic energy of the scene."
+    },
+    {
+      "title": "Chapter 3: The Wild Wood",
+      "summary": "Mole and Rat venture deep into the dark, mysterious Wild Wood, where they get lost and encounter the stern but fair Mr. Badger.",
+      "imagePrompt": "A sturdy, wise-looking Badger with a distinctive striped face, wearing a thick, textured wool sweater, standing at the entrance of a grand, dark burrow lit by a warm, glowing lantern. In the foreground, a timid Mole and a brave Water Rat huddle together, appearing small and overwhelmed by the towering, gnarled tree trunks surrounding them. Whimsical, neo-impressionist watercolor style, utilizing deep, moody forest greens and earthy browns contrasted with the radiant, warm golden light from the lantern, emphasizing the feeling of safety found within the wild, shadowy woods."
+    },
+    {
+      "title": "Chapter 4: Mr. Badger",
+      "summary": "The trio enjoys the hospitality of Mr. Badger in his cozy, cavernous home, safe from the winter snow outside.",
+      "imagePrompt": "Inside a sprawling, warm underground home, Mr. Badger, Mole, and Water Rat are gathered around a large, roaring stone fireplace. The room is filled with comfortable, rustic furniture, stacks of books, and a copper kettle steaming on the hearth. The light from the fire casts a soft, comforting glow on their faces as they eat a hearty meal. Whimsical, neo-impressionist watercolor style, with loose, gestural brushstrokes, rich orange and amber lighting, and a soft, inviting texture that creates a cozy, domestic sanctuary, perfectly capturing the feeling of friendship and warmth in the heart of winter."
     }
   ]
 }
