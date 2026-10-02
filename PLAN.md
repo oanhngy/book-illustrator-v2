@@ -172,7 +172,7 @@ p every write`
 - [x] `FakeGeminiClient` đọc từ `fixtures/*.json`.
 - [x] `GeminiClient` thật, gọi REST, đọc API key từ biến môi trường.
 - [x] Cờ `USE_FAKE_GEMINI` để chọn implementation lúc đăng ký DI.
-- [ ] Gọi thật **một lần** cho mỗi loại, lưu response làm fixture.
+- [x] Gọi thật **một lần** cho mỗi loại, lưu response làm fixture.
 
 **Decision:** interface trả về kiểu riêng của mình (`GeminiJsonResult`) để fake không phải giả lập cả tầng HTTP
 
