@@ -59,13 +59,7 @@ public class GeminiClient : IGeminiClient
 
     public async Task<GeminiJsonResult> GenerateJsonAsync(GeminiJsonRequest request)
     {
-        // Bỏ check "lượt đầu bắt buộc có BookUri": giả định cũ sai, vì document+uri (Files API)
-        // đang gặp lỗi backend Gemini (xem docs/api-docs.md mục 1 — "blobstore" issue), nên lượt
-        // đầu giờ có thể đưa sách vào bằng BookUri HOẶC nhét thẳng vào Prompt (inline, như v1 cũ
-        // đã làm). Code không biết Prompt có chứa sách hay không nên không validate được nữa —
-        // trách nhiệm đảm bảo lượt đầu có ngữ cảnh sách giờ thuộc về caller (PipelineService).
-
-        //input: sách(lượt đầu only, BookUri null các lượt sau)+prompt
+        //dùng document+uri báo lỗi --> bỏ "bắt buộc BookUri" ở lượt đầu
         var input=new JsonArray();
         if(request.BookUri != null)
         {

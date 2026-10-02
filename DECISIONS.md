@@ -285,6 +285,33 @@ Cả hai đều thoả FR-23 **nếu** state được persist trước khi chạ
 **Xem lại khi** Bị lỗi khi gọi thật hoặc retention 1 ngày làm resume không dùng được 
 
 ---
+## 17. document+uri không dùng được khi gọi thật
+**Bối cảnh** ##11 và ##14 giả định GeminiJsonRequest.BookUri là cách duy nhất đưa sách vào; Test gọi thật không dùng được document+uri dù đúng format, báo lỗi, nguyên nhân ở Gemini Backend (đã xác nhận ở forum); Đối chiếu proj v1 chỉ nhét=inline text --> cần giải quyết trước Phase 6
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. Giữ document+uri, chờ Google sửa | Đúng FR-29 gốc | Không rõ thời gian fix |
+| B. Chuyển sang inline text như v1 | Đã chứng minh hoạt động tốt, không phụ thuộc Files API | Sách thật (~100k token) nhét vào request có thể vượt giới hạn kích thước request |
+| C. Thử document+uri, nếu lỗi --> fallback sang inline | Tự phục hồi nếu sau này Google sửa bug | Kéo dài code, thêm 1 nhánh logic để né 1 bug ngoại cảnh only |
+**Chốt** B. Chuyển sang inline text như v1
+**Trade-offs**
+    - Bỏ check bắt buộc BookUri trong GeminiClient.GenerateJsonAsync vì giờ có 2 cách hợp lệ; trách nhiệm đảm bảo lượt đầu có ngữ cảnh chuyển sang caller PipelineService
+    - UploadBookAsync tự nó vẫn đúng, chỉ việc dùng nó tham chiếu mới lỗi
+    - Chi phí token chỉ tốn 1 lần cho việc gọi Style, tốt hơn cách C khi phải tốn 2 lần nếu bug chưa được fix
+**Xem lại khi** Khi Google sửa xong lỗi +test hoạt động thì chuyển về A; Cần đo kích thước sách thật với giới hạn request của Gemini
+
+---
+## 18. placeholder
+**Người đề xuất**
+**Bối cảnh**
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+**Chốt**
+**Trade-offs**
+**Xem lại khi** 
+
+---
 ## Cần có ít nhất các mục sau
 
 - [x] **Stack và storage** — vì sao .NET + React JS; vì sao JSON file thay vì SQLite, dù bản trước đã dùng SQLite thành công. Cái giá: không transaction, không query, chỉ đúng với một process.
