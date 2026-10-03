@@ -67,7 +67,7 @@ Client           API            Channel    BackgroundService     Pipeline       
   |               |                |               |                 |               |               |
   | 1. POST .../steps/2/run        |               |                 |               |               |
   |-------------->|                |               |                 |               |               |
-  |               | 2. ClaimStepAsync(id, 2)       |                 |               |               |
+  |               | 2. ClaimStepAsync(id,2,style)  |                 |               |               |
   |               |------------------------------------------------->|               |               |
   |               |                |               |                 | 3. UpdateAsync|               |
   |               |                |               |                 |-------------->|               |
@@ -75,14 +75,15 @@ Client           API            Channel    BackgroundService     Pipeline       
   |               |                |               |                 |               | │ đọc project│|
   |               |                |               |                 |               | │ check      │|
   |               |                |               |                 |               | │ running=2  │|
+  |               |                |               |                 |               | │ since=now  │|
   |               |                |               |                 |               | │ ghi atomic │|
   |               |                |               |                 |               | └────────────┘|
   |               |                |               |                 | 4. OK         |               |
   |               |                |               |                 |<--------------|               |
-  |               | 5. OK (claimed)|               |                 |               |               |
+  |               | 5. Claimed + vé|               |                 |               |               |
   |               |<-------------------------------------------------|               |               |
   |               |                |               |                 |               |               |
-  |               | 6. Write(id, 2)|               |                 |               |               |
+  |               | 6. Write(job)  |               |                 |               |               |
   |               |--------------->|               |                 |               |               |
   | 7. 202 Accepted                |               |                 |               |               |
   |<--------------|                |               |                 |               |               |
@@ -96,14 +97,21 @@ Client           API            Channel    BackgroundService     Pipeline       
   |               |                |   [Tự tạo IServiceScopeFactory.CreateScope()]   |               |
   |               |                |   [Resolve PipelineService từ Scope mới]        |               |
   |               |                |               |                 |               |               |
-  |               |                |               9. RunStepAsync(id, 2)            |               |
+  |               |                |               9. RunStepAsync(job)              |               |
   |               |                |               |---------------->|               |               |
   |               |                |               |                 | 10. Gọi API   |               |
   |               |                |               |                 |------------------------------>|
   |               |                |               |                 | 11. Trả KQ    |               |
   |               |                |               |                 |<------------------------------|
-  |               |                |               |                 | 12. Lưu, running=null (atomic)|
+  |               |                |               |                 |12. UpdateAsync|               |
   |               |                |               |                 |-------------->|               |
+  |               |                |               |                 |               | ┌─ lock ─────┐|
+  |               |                |               |                 |               | │ đọc project│|
+  |               |                |               |                 |               | │ so vé      │|
+  |               |                |               |                 |               | │ khớp: lưu  │|
+  |               |                |               |                 |               | │ lệch: bỏ   │|
+  |               |                |               |                 |               | │ ghi atomic │|
+  |               |                |               |                 |               | └────────────┘|
 -------------------------------------------------------------------------------------------------------------
                                             [ LUỒNG POLLING ]
 -------------------------------------------------------------------------------------------------------------
@@ -120,13 +128,21 @@ Client           API            Channel    BackgroundService     Pipeline       
 
 **Điểm mấu chốt:** khối `lock` thay thế cho câu `UPDATE ... WHERE completedSteps = N-1 AND runningStep IS NULL` mà database sẽ làm giùm. Không có nó, hai request đồng thời cùng đọc thấy "rảnh" và cùng gọi Gemini → vi phạm FR-24.
 
+**Chú thích sau Phase 6 decisions:**
+- Bước 2: `style` chỉ có nghĩa ở bước 1, ghi vào `requestedStyle` trong cùng lock (`DECISIONS.md` ##18)
+- Bước 5: claim trả kết quả = trạng thái + vé (##20). Bị từ chối --> endpoint trả `409`/`404` ngay, **không có** bước 6
+- `job` = (projectId, step, vé); vé = `runningSince` ghi lúc claim (##19)
+- Bước 8–9: worker xử lý **tuần tự** từng job (##21)
+- Bước 12: `khớp: lưu` = ghi kết quả + `completedSteps = step` + `runningStep = null`; `lệch: bỏ` = lượt đã mất claim, không ghi gì. Nhánh ghi lỗi (`failedStep`/`lastError`) cũng so vé y như vậy (##19)
+
 ## A6. Giả định đã chấp nhận
 - Chạy 1 process duy nhất. Lock trong bộ nhớ không bảo vệ được nhiều instance, có trong README
 - KHông auth thật, email là danh tính
 - Không migration cho JSON: đổi schema là phải xử lý file cũ manual hoặc xóa data/ --> Chấp nhận cho dự án cá nhân
-- Channel<T> chỉ tồn tại trong bộ nhớ, không bền. Nếu server restart giữa lúc item còn trong hàng đợi (chưa xuống BackgroundService), item đó sẽ mất, vì runningStep/runningSince đã ghi xuống disk trước enqueue (xem A5 bước 2-6), cơ chế phát hiện bước treo được cứu khi user thấy bước "đang chạy" quá lâu và tự force retry
+- Channel<T> chỉ tồn tại trong bộ nhớ, không bền. Nếu server restart giữa lúc item còn trong hàng đợi (chưa xuống BackgroundService), item đó sẽ mất, vì runningStep/runningSince đã ghi xuống disk trước enqueue (xem A5 bước 2-6), cơ chế phát hiện bước treo được cứu khi user thấy bước "đang chạy" quá lâu và tự force retry; force retry xoá runningSince --> vé của lượt cũ tự vô hiệu (##19)
+- Worker đọc Channel<T> chạy tuần tự 1 job/lần (##21): bước của project khác có thể phải xếp hàng 1-2 phút; trong lúc đó UI đã thấy "đang chạy" vì runningStep/runningSince ghi từ lúc claim. Ngưỡng treo ở Phase 8 phải tính cả thời gian xếp hàng
 - KHông hỗ trợ đổi email sau khi tạo tài khoản, out of scope của requirements
-- Context phía Gemini có TTL 48h, hết hạn phải re-construct, chi tiết docs/02-pipeline.md phần 2
+- Interaction phía Gemini lưu có hạn (free tier 1 ngày, `DECISIONS.md` ##16); hết hạn phải re-construct ngữ cảnh (Phase 8), chi tiết docs/02-pipeline.md phần 2. book.uri (48h) không còn dùng để tham chiếu (##17)
 
 ---
 
@@ -156,7 +172,7 @@ Trade-offs ở `DECISIONS.md` ##2
 
   "completedSteps": 2,
   "runningStep": null,
-  "runningSince": null,
+  "runningSince": null, //utc lúc claim, kiêm vé claim (##19), k làm tròn
   "failedStep": null,
   "lastError": null,
 
@@ -164,16 +180,31 @@ Trade-offs ở `DECISIONS.md` ##2
   "textInteractionId": "…",
   "imageInteractionId": "…",
 
+  "requestedStyle": null, //style user nhập ở B1, null=để AI tự chọn
   "style": "watercolour, soft edges, warm palette",
   "characters": [ { "name": "Mole", "imagePrompt": "…" } ],
   "chapters":   [ { "title": "…", "summary": "…", "imagePrompt": "…" } ],
-  "images":     [ { "id": "…", "step": 3, "index": 0, "path": "…", "mimeType": "image/png", "createdAt": "…" } ]
+  "images":     [ { "id": "…", "step": 3, "index": 0, "path": "…", "mimeType": "image/jpeg", "createdAt": "…" } ]
 }
 ```
 
 **bookText để trog file hay tách?**
 --> Tách riêng vì field trong đó thay đổi liên tục, để chung thì phải chép lại toàn bộ nội dung còn lại dù không thay đổi nhiều lần --> tốn kém + write amplification không cần thiết 
 Trade-off: khi trả full detail (C4, cần cả bookText) thì server phải đọc 2 file thay vì 1, nhưng chi phí READ rẻ hơn WRITE, + tần suất thấp --> đáng đánh đổi
+
+**requestedStyle vs style — 2 field, 2 nghĩa:**
+- requestedStyle= **input**: cái user gõ vào ô style ở B1. Ghi lúc claim B1 (cùng lần ghi với `runningStep`), trước khi gọi Gemini
+- style= **output**: kết quả của B1, chỉ có giá trị sau khi B1 xong. User không nhập --> text AI sinh; user có nhập --> bằng đúng `requestedStyle`
+- B1 lỗi giữa chừng: `requestedStyle` có giá trị, `style` vẫn null --> không nhầm "đã nhập" với "đã xong"
+- Chỉ claim B1 được ghi `requestedStyle`, claim bước khác không đụng
+- project.json cũ không có field này --> đọc ra null (A6: không migration)
+Trade-offs ở `DECISIONS.md` ##18
+
+**runningSince — 2 vai:**
+- mốc thời gian: Phase 8 tính bước đã chạy bao lâu (FR-27)
+- vé claim: lượt chạy giữ giá trị lúc claim, mọi lần ghi so vs giá trị trên disk, lệch --> k ghi (##19)
+- Chỉ claim được ghi field này; worker không được cập nhật lại
+- Không làm tròn: System.Text.Json giữ đủ 7 chữ số thập phân, so bằng mới đúng
 
 **Resume theo item (Portraits/Illustrations) — không đổi schema:**
 Khi retry step 3/5, `PipelineService` lọc `project.images.Where(i => i.step == step)` để biết những
@@ -212,7 +243,7 @@ Trade-offs ở `DECISIONS.md` ##6
 ## B8. Test bắt buộc cho tầng này
 
 - [ ] Ghi rồi đọc lại ra đúng giá trị.
-- [ ] 50 `UpdateAsync` song song lên cùng project → không mất update nào.
+- [x] 50 `UpdateAsync` song song lên cùng project → không mất update nào.
 - [ ] Hai claim đồng thời cho cùng một bước → đúng **một** cái thành công.
 - [ ] File `.tmp` bị bỏ lại không làm hỏng lần đọc kế tiếp.
 
@@ -245,13 +276,13 @@ Trade-offs ở `DECISIONS.md` ##4
 ## C3. `GET /api/projects`
 
 ```
-← 200 [ { "id","title","createdAt","completedSteps","runningStep","failedStep" } ]   // mới nhất trước
+← 200 [ { "id","title","createdAt","completedSteps","runningStep","failedStep","status" } ]   // mới nhất trước
 ```
 Trạng thái hiển thị ở UI: server trả sẵn một trường `status`, hay client tự tính? **Server tính**, BE định nghĩa rõ enum trạng thái và maintain, logic running/failed/completed chỉ viết 1 chỗ duy nhất(FR-30), payload nặng hơn đúng 1 field có giá ít hơn so với việc trùng lặp logic
 
 ## C4. `GET /api/projects/{id}`
 
-Trả detail đầy đủ: cộng thêm `bookText`, `style`, `characters`, `chapters`, `images[]`, `lastError`, `canForceRetry`.
+Trả detail đầy đủ: cộng thêm `bookText`, `style`, `characters`, `chapters`, `images[]`, `lastError`, `canForceRetry`, `requestedStyle`.
 
 - `404` nếu không tồn tại **hoặc** thuộc user khác. Dùng 404 thay 403 để không lộ việc project có tồn tại.
 - Endpoint này bị polling 2s → phải rẻ. Ảnh trả **URL**, tuyệt đối không nhúng base64.
@@ -260,12 +291,22 @@ Trả detail đầy đủ: cộng thêm `bookText`, `style`, `characters`, `chap
 
 Body (chỉ dùng ở bước 1): `{ "style": "…" }` — tuỳ chọn (FR-31).
 
-| Mã | Khi nào |
-|---|---|
-| `202 Accepted` | Claim thành công, bước đang chạy nền |
-| `409 Conflict` | Sai thứ tự, hoặc đang có bước chạy → **đây chính là cơ chế chống gọi trùng** |
-| `400` | step ngoài 1–5 |
-| `404` | không phải project của user |
+**Luật của body `style`** (lý do ở `DECISIONS.md` ##18):
+- Có `style` --> server lưu vào `requestedStyle`, B1 chạy theo style đó
+- Không có body / `{}` / `"style": null` --> `requestedStyle`=null, AI tự chọn style
+- **Retry B1 cũng theo đúng luật trên**: mỗi lần gọi ghi đúng cái request gửi, server KHÔNG tự dùng lại style của lần trước. Muốn retry với style cũ --> client gửi lại (FE lấy `requestedStyle` từ C4 điền sẵn vào ô nhập)
+- Request bị `409` không thay đổi `requestedStyle`
+- Bước 2–5: body bị bỏ qua, `requestedStyle` giữ nguyên
+
+| Mã | `error` (C8) | Khi nào |
+|---|---|---|
+| `202 Accepted` | — | Claim thành công, bước đang chạy nền |
+| `409 Conflict` | `STEP_ALREADY_RUNNING` | Đang có bước chạy → **đây chính là cơ chế chống gọi trùng** |
+| `409 Conflict` | `STEP_NOT_AVAILABLE` | Sai thứ tự: bước trước chưa xong, hoặc bước này đã xong |
+| `400` | `INVALID_STEP` | step ngoài 1–5 |
+| `404` | `PROJECT_NOT_FOUND` | không phải project của user |
+
+Hai mã `409` tương ứng 2 trạng thái từ chối của claim (`DECISIONS.md` ##20).
 
 Không trả kết quả — client polling `GET /api/projects/{id}`.
 

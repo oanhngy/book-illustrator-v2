@@ -301,7 +301,93 @@ Cả hai đều thoả FR-23 **nếu** state được persist trước khi chạ
 **Xem lại khi** Khi Google sửa xong lỗi +test hoạt động thì chuyển về A; Cần đo kích thước sách thật với giới hạn request của Gemini
 
 ---
-## 18. placeholder
+## 18. Style do user nhập nằm ở đâu giữa 202 và worker chạy
+**Người đề xuất** Claude (từ FR-31 + docs/03-design.md C5)
+**Bối cảnh** User nhập Style, trả về 202 Accepted ngay. Việc thực thi BackgroundService lấy ở Channel<T> diễn ra sau (bất đồng bộ) --> giá trị phải sống qua khoảng đó; FR-23 yêu cầu state nằm trên disk, FR-26 yêu cầu retry đúng bước
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. Trong item của channel | Project.cs và project.json không thêm field | Dữ liệu trong RAM, nếu B1 lỗi + user bấm Retry --> server không nhớ style cũ; app restart mất hết |
+| B. Ghi vào project.style ngay lúc claim | Tận dụng field có sẵn | Nhập nhằng trạng thái: project.Style=result hoàn chỉnh của B1, ghi sớm=sai ý nghĩa nếu bước này fail giữa chừng |
+| C. Thêm field riêng requestedStyle vào Project.cs | Tách bạch rõ yêu cầu đầu vào (requestedStyle) vs kết quả từ AI (Style); hỗ trợ Retry tốt | Thêm field string? vào Project.cs và file JSON trên đĩa |
+**Chốt** C. Thêm field riêng requestedStyle
+    - Ghi ở đâu: chỉ bên trong mutate của claim, sau khi check pass, cùng lần ghi với runningStep --> request bị 409 không bao giờ đè được style của request thắng
+    - Chỉ ghi khi step==1; claim bước khác không đụng field này
+    - Luật retry: mỗi lần claim B1 ghi đúng giá trị request gửi (null=để AI tự chọn). Loại luật "không gửi thì giữ cái cũ" vì null khi đó mang 2 nghĩa, user không quay về "AI tự chọn" được
+    - Nhớ style cũ khi retry là việc của FE: GET detail trả requestedStyle, FE điền sẵn vào ô nhập rồi gửi lại tường minh
+    - B1 xong: user không nhập --> p.Style=text AI sinh; user có nhập --> p.Style=requestedStyle (bỏ text AI trả, chỉ giữ interaction id để nối ngữ cảnh)
+**Trade-offs**
+    - Thêm 1 field vào Project.cs + schema B3; đổi lại input của user không mất khi bước lỗi hoặc restart, không nhập nhằng input với kết quả
+    - ClaimStepAsync mang 1 tham số chỉ B1 dùng
+    - Retry không kèm body (vd curl) sẽ chạy nhánh "AI tự chọn", không dùng lại style cũ --> chấp nhận vì đúng với điều request nói
+    - Không tự chạy lại: item trong Channel<T> vẫn mất khi restart (docs/03-design.md A6), user vẫn phải bấm
+    - project.json cũ không có field --> đọc ra null, vô hại (A6: không migration)
+**Xem lại khi** Khi pipeline mở rộng cho phép user nhập các tham số tùy biến phức tạp cho các bước khác, khi đó cần xem xét gom các tham số user nhập thành object riêng
+
+---
+## 19. Lượt chạy cần prove "còn giữ claim" trước khi ghi kết quả hay không
+**Người đề xuất** Claude
+**Bối cảnh** Claim có giự lock, sau đó gọi Gemini API=ngoài lock, khi Ai trả kết quả Worker quay lại xin lock để ghi. Lock chỉ chống 2 lần ghi cùng lúc, không biết lượt nào còn được giao việc. Áp dụng cho mọi lần ghi của RunStepAsync: ghi kết quả, ghi lỗi, ghi từng ảnh ở phase 7
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. Không kiểm, ghi thẳng | Ít code nhất | Lượt cũ đè lượt mới: chracters + textInteractionId bị thay; lượt cũ lỗi thì ghi failedStep đè lên lượt mới đang chạy tốt |
+| B. Check runningStep==step | 1 dòng, k đổi chữ ký; chặn case đã reset mà chưa chạy lại | Không phân biệt 2 lượt của cùng 1 bước |
+| C. Vé claim: so runningSince lúc claim với runningSince ở disk | Phân biệt đúng từng lượt; reset -->xóa runningSince=vô hiệu hóa; Phase 8 không phải sửa | Vé phải đi theo claim --> channel item --> RunStepAsync, claim không được trả bool |
+**Chốt** C. Vé claim=runningSince
+    - Claim ghi runningSince=UtcNow cùng lần ghi với runningStep, trả giá trị đó cho caller
+    - Item trong Channel<T> mang projectId, step, vé
+    - Mọi lần ghi trong RunStepAsync so vé bên trong mutate, lệch -->false, không ghi gì kể cả lỗi
+    - Lượt bị từ chối: bỏ kqua, chỉ log, không ném exception
+**Trade-offs**
+    - Không cứu được token: lời gọi Gemini AI ở lượt cũ đã gửi, chỉ bảo vệ dữ liệu trên disk
+    - Dùng runningSince thay cho Guid riêng: không thêm field, đổi lại 1 field mang 2 role: mốc tgian tính treo + vé; không được làm tròn
+    - Trả giá sớm: Phase 6 chưa có force-reset nên so vé chưa fail; làm luôn ở Phase 6 thì chỉ làm 2 bước thay vì để Phase 8 làm 5 bước + ghi từng ảnh
+    - Ép quyết định kiểu trả về của claim phải chở được vé
+**Xem lại khi** runningSince cần đổi nghĩa (vd cập nhật heartbeat giữa chừng) --> tách vé thành Guid riêng
+
+---
+## 20. ClaimStepAsync báo kết quả từ chối bằng gì
+**Người đề xuất** Claude
+**Bối cảnh**  ClaimStepAsync trả về kiểu dữ liệu gì để:
+- Báo được kết quả: Thành công kèm vé claim (runningSince) (##19)
+- Báo được: Thất bại kèm lý do để endpoint dựng {error, message} theo C8
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. bool/DataTime? (null=từ chối) | Ít code nhất, khớp UpdateAsync | bool không chở được vé (##19); DateTime chở được nhưng mất lý do |
+| B. Exception riêng mang lý do | Đường thành công gọn, trả thẳng vé | Dùng exception để điều khiển luồng nghiệp vụ thông thường như double-click=bad practice; endpoint phải bọc try-catch; test 2 claim song song khó viết |
+| C. Result nhỏ (enum state + vé) | Giữ lý do, không exception, map thẳng sang HTTP + error code của C8 | Thêm 1 enum + 1 record; caller có thể quên check trạng thái trước khi dùng vé |
+**Chốt** C. Result nhỏ
+    - Lý do được gán trong mutate qua biến cpatured; UpdateAsync giữ nguyên chữ ký bool, Storage vẫn không biết khái niệm pipeline
+    - Project không tồn tại: UpdateAsync không gọi mutate --> giá trị khởi tạo của trạng thái là "không tồn tại"
+    - Endpoint map: thành công -->202, sai thứ tự, đang chạy--> 409, không tồn tại -->404
+**Trade-offs**
+    - Thêm 1 kiểu mới chỉ để trả về, chấp nhận vì đổi lại message lỗi đúng lý do + không phải đọc state lần 2 ngoài lock
+    - Loại bool vì không tương thích ##19, loại exception vì bị từ chối=nghiệp vụ, không phải lỗi hệ thống
+**Xem lại khi** Các method khác của PipelineService cũng cần trả kết quả + lý do --> cân nhắc 1 kiểu Result dùng chung
+
+---
+## 21. Worker đọc Channel<T> chạy tuần tự hay song song
+**Người đề xuất** Claude
+**Bối cảnh** ##5 chốt Background Service + Channel<T> nhưng chưa nói bao nhiêu task chạy cùng lúc
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. 1 worker, tuần tự | Ít code nhất, tự giới hạn tốc độ gọi Gemini, test tất định | Project B kẹt sau Project A; UI hiện đang chạy nhưng thật ra đang xếp hàng |
+| B. Song song có giới hạn N | Project khác nhau không chờ | Phải chọn N, N lời gọi cùng lúc dễ dính 429, FR-28 cấm auto-retry; test khó tất định |
+| C. Mỗi item 1 task, không giới hạn | Không ai chờ ai | Là Task.Run mà ##5 đã loại; không trần; exception bị nuốt, shutdown không chờ |
+**Chốt** A. 1 worker, tuần tự, channel unbounded
+    - Unbounded: ghi vào luôn thành công --> endpoint không cần đường rollback sau claim
+    - Không sợ phình: mội project max 1 item trong hàng (claim chặn item 2nd) --> độ dài hàng <=số project
+**Trade-offs**
+    - Proj B phải đợi proj A, với cap hiện tại mỗi job 1-2 phút --> chấp nhận cho scope 1 process, ít user
+    - runningSince tính cả thời gian xếp hàng; không ghi lại lúc worker bắt đầu vì runningSince là vé (##19) --> ngưỡng treo ở Phase 8 cần cộng tgian chờ
+    - Đổi sang B sau này chỉ cần sửa vòng la95p trong BackgroundService, không đụng claim/vé/endpoint
+**Xem lại khi** Có nhiều user thật chạy cùng lúc; thời gian chờ thành vấn đề --> chuyển sang B với N nhỏ
+
+---
+## 22. placeholder
 **Người đề xuất**
 **Bối cảnh**
 **Options**
