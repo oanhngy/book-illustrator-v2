@@ -10,13 +10,17 @@ public class Project
     //tiến độ: completedSteps + runningStep
     public int CompletedSteps { get; set; }
     public int? RunningStep { get; set; }
-    public DateTime? RunningSince { get; set; }
+    public DateTime? RunningSince { get; set; } //UTC lúc claim; kiêm vé claim (DECISIONS ##19) --> chỉ claim được ghi
     public int? FailedStep { get; set; }
     public string? LastError { get; set; }
 
-    public string? ContextRef { get; set; } //phase 5,6
+    //con trỏ ngữ cảnh, 3 field phẳng (DECISIONS ##13)
+    public string? BookUri { get; set; } //kết quả UploadBookAsync; chưa dùng để tham chiếu vì lượt đầu inline sách (##17)
+    public string? TextInteractionId { get; set; } //id lượt text gần nhất (B1, B2, B4) --> PreviousInteractionId của lượt text kế
+    public string? ImageInteractionId { get; set; } //id lượt ảnh gần nhất (B3, B5) --> PreviousInteractionId của lượt ảnh kế
 
-    public string? Style { get; set; }
+    public string? RequestedStyle { get; set; } //input: style user nhập ở B1, ghi lúc claim, null=để AI tự chọn (DECISIONS ##18)
+    public string? Style { get; set; } //output: kết quả B1, chỉ có sau khi B1 xong
     public List<Character> Characters { get; set; } = [];
     public List<Chapter> Chapters { get; set; } = [];
     public List<ImageRef> Images { get; set; } = [];
@@ -42,5 +46,5 @@ public class ImageRef
     public int Index {get; set;} //thứ tự character/chapter --> lọc resume theo item
     public string Path {get; set;}=string.Empty;
     public string MimeType {get; set;}=string.Empty;
-    public DateTime CreateAt {get; set;}
+    public DateTime CreatedAt {get; set;} //key JSON "createdAt" khớp B3
 }
