@@ -1,4 +1,6 @@
-using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using server.Gemini;
 using server.Models;
 using server.Pipeline;
 using server.Storage;
@@ -15,7 +17,7 @@ public class PipelineServiceClaimTests : IDisposable
     {
         _tempDir=Path.Combine(Path.GetTempPath(), $"book-illustrator-tests-{Guid.NewGuid()}");
         _store=new ProjectStore(_tempDir);
-        _pipeline=new PipelineService(_store);
+        _pipeline=new PipelineService(_store, new StubGeminiClient(), Options.Create(new GeminiOptions()), NullLogger<PipelineService>.Instance);
     }
 
     //after
@@ -54,6 +56,7 @@ public class PipelineServiceClaimTests : IDisposable
         //assert
         //đọc lại disk
         var reloaded=await _store.GetAsync(project.Id);
+        Assert.NotNull(reloaded);
         Assert.Equal(ClaimStatus.Claimed, result.Status);
         Assert.NotNull(result.Ticket);
         Assert.Equal(1, reloaded.RunningStep);
@@ -154,6 +157,7 @@ public class PipelineServiceClaimTests : IDisposable
         //assert
         var reloaded=await _store.GetAsync(project.Id);
         Assert.NotNull(reloaded);
+        //Assert.Null(reloaded);
         Assert.Equal(ClaimStatus.AlreadyRunning, loser.Status);
         Assert.Equal("watercolor", reloaded.RequestedStyle);
     }
