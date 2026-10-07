@@ -20,7 +20,7 @@ public static class AuthEndpoints
                 return Results.BadRequest(new ApiError("INVALID_INPUT", "Email and name are required"));
             }
 
-            //regex cơ bản
+            //regex cơ bản, check email
             if(!Regex.IsMatch(request.Email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
             {
                 return Results.BadRequest(new ApiError("INVALID_EMAIL", "Email format is invalid"));

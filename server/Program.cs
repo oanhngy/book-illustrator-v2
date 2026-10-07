@@ -2,6 +2,8 @@ using server.Endpoints;
 using server.Gemini;
 using Microsoft.Extensions.Options;
 using server.Storage;
+using System.Threading.Channels;
+using server.Pipeline;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCors(options =>
@@ -41,6 +43,9 @@ else
 
 builder.Services.AddSingleton<UserStore>(); //AuthEndpoints
 builder.Services.AddSingleton<ProjectStore>(); //ProjectEndpoints
+builder.Services.AddSingleton(Channel.CreateUnbounded<StepJob>(new UnboundedChannelOptions {SingleReader=true}));
+builder.Services.AddScoped<PipelineService>();
+builder.Services.AddHostedService<PipelineWorker>();
 
 var app = builder.Build();
 

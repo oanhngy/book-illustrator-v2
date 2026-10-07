@@ -239,7 +239,7 @@ public class PipelineService
         return characters;
     }
 
-    //đọc gtri của property dạng string trong các obj JSON, sai dạng/thiếu/rỗng --> null
+    //đọc gtri của property dạng string trong các obj , sai dạng/thiếu/rỗng --> null
     private static string? ReadString(JsonElement obj, string propertyName)
     {
         if(obj.ValueKind==JsonValueKind.Object && obj.TryGetProperty(propertyName, out var value) && value.ValueKind==JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString()))
