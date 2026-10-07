@@ -20,6 +20,30 @@ public class PipelineService
         }
         """).RootElement.Clone();
 
+    private const int MaxCharacters=2; //cap B2 Character
+
+    //schema B2
+    private static readonly JsonElement CharactersSchema=JsonDocument.Parse(
+        """
+        {
+            "type": "object",
+            "properties": {
+                "characters": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": { "type": "string" },
+                            "imagePrompt": { "type": "string" }
+                        },
+                        "required": ["name", "imagePrompt"]
+                    }
+                }
+            },
+            "required": ["characters"]
+        }
+        """).RootElement.Clone();
+
     private readonly ProjectStore _store;
     private readonly IGeminiClient _gemini; //đổi fake/real mà pipeline k biết
     private readonly GeminiOptions _options;
@@ -81,8 +105,11 @@ public class PipelineService
             //dispatch=switch+private method
             switch(job.Step)
             {
-                case 1:
+                case 1: //style
                     await RunStyleAsync(job);
+                    break;
+                case 2: //character
+                    await RunCharactersAsync(job);
                     break;
                 default: throw new InvalidOperationException($"Step {job.Step} is not implemented");
             }
@@ -97,14 +124,18 @@ public class PipelineService
     //B1-STYLE, only place gửi text sách
     private async Task RunStyleAsync(StepJob job)
     {
-        var project=await _store.GetAsync(job.ProjectId); //đọc snapshot ngoài lock
+        // var project=await _store.GetAsync(job.ProjectId); //đọc snapshot ngoài lock
 
-        //check vé sớm: job mất claim khi xếp hàng -->bỏ, khỏi gọi API=tiết kiệm
-        if(project is null || project.RunningSince != job.Ticket)
-        {
-            _logger.LogWarning("Step {Step} of project {ProjectId} skipped: claim ticket no longer valid", job.Step, job.ProjectId);
-            return;
-        }
+        // //check vé sớm: job mất claim khi xếp hàng -->bỏ, khỏi gọi API=tiết kiệm
+        // if(project is null || project.RunningSince != job.Ticket)
+        // {
+        //     _logger.LogWarning("Step {Step} of project {ProjectId} skipped: claim ticket no longer valid", job.Step, job.ProjectId);
+        //     return;
+        // }
+
+        //đọc snapshot + check vé sớm, null=mất claim --> bỏ, k gọi API
+        var project=await LoadIfOwnerAsync(job);
+        if(project is null) return;
         
         //thiếu sách=lỗi data--> ném, RunStepAsync bắt+ghi lỗi
         var bookText=await _store.GetBookTextAsync(job.ProjectId) 
@@ -137,6 +168,85 @@ public class PipelineService
             p.Style=style;
             p.TextInteractionId=result.InteractionId;
         });
+    }
+
+    //B2-CHARACTERS
+    private async Task RunCharactersAsync(StepJob job)
+    {
+        var project=await LoadIfOwnerAsync(job);
+        if(project is null) return;
+
+        //B1 done mà k có interaction id--> throw
+        var previousId=project.TextInteractionId
+            ?? throw new InvalidOperationException($"Project {job.ProjectId} has no text interaction to continue");
+
+        var result=await _gemini.GenerateJsonAsync(new GeminiJsonRequest
+        {
+            Model=_options.TextModel,
+            Prompt="Can you describe the main characters (only the adults) and prepare a prompt describing them with as much details as possible (use the descriptions from the book) so Nano Banana can generate images of them? Each prompt should be at least 50 words. "
+                + $"Return at most {MaxCharacters} characters, the most important ones first.",
+            PreviousInteractionId=previousId, //nối B1
+            Schema=CharactersSchema
+        });
+
+        //cap ở server, Gem có thể nhớ nhiều hơn, nhưng chỉ LƯU+VẼ max 2
+        var characters=ReadCharacters(result.Data).Take(MaxCharacters).ToList();
+
+        await CompleteAsync(job, p =>
+        {
+            p.Characters=characters;
+            p.TextInteractionId=result.InteractionId;
+        });
+    }
+
+    //đọc snapshot ngoài lock + check vé sớm
+    //phần đầu B1, B2
+    private async Task<Project?> LoadIfOwnerAsync(StepJob job)
+    {
+        var project=await _store.GetAsync(job.ProjectId);
+        if(project is null || project.RunningSince != job.Ticket)
+        {
+            _logger.LogWarning("Step {Step} of project {ProjectId} skipped: claim ticket no longer valid", job.Step, job.ProjectId);
+            return null;
+        }
+        return project;
+    }
+
+    //lấy list nvat ra JSON, thiếu name/imagePrompt bỏ qua, k có item nào-->throw
+    private static List<Character> ReadCharacters(JsonElement data)
+    {
+        var characters=new List<Character>();
+        if(data.ValueKind==JsonValueKind.Object && data.TryGetProperty("characters", out var array) && array.ValueKind==JsonValueKind.Array)
+        {
+            foreach(var item in array.EnumerateArray())
+            {
+                var name=ReadString(item, "name");
+                var imagePrompt=ReadString(item, "imagePrompt");
+                if(name is not null && imagePrompt is not null)
+                {
+                    characters.Add(new Character
+                    {
+                        Name=name,
+                        ImagePrompt=imagePrompt
+                    });
+                }
+            }
+        }
+        if(characters.Count==0)
+        {
+            throw new GeminiException("Gemini response does not contain any character");
+        }
+        return characters;
+    }
+
+    //đọc gtri của property dạng string trong các obj JSON, sai dạng/thiếu/rỗng --> null
+    private static string? ReadString(JsonElement obj, string propertyName)
+    {
+        if(obj.ValueKind==JsonValueKind.Object && obj.TryGetProperty(propertyName, out var value) && value.ValueKind==JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString()))
+        {
+            return value.GetString();
+        }
+        return null;
     }
 
     //in case schema sai dạng, coi như lỗi-->user retry
