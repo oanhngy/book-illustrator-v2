@@ -206,10 +206,12 @@ p every write`
 **Việc cần làm:**
 - [ ] Bước 3 Portraits, bước 4 Chapters (cap **1 chương**), bước 5 Illustrations.
 - [ ] Lưu ảnh vào `data/images/{projectId}/`, metadata vào JSON.
-- [ ] `GET /api/images/{id}` phục vụ ảnh — **chống path traversal**.
+- [ ] `GET /api/projects/{projectId}/images/{imageId}` phục vụ ảnh — **chống path traversal** (route đổi theo DECISIONS ##24).
 - [ ] Lưu ảnh **ngay sau mỗi tấm**, không đợi cả bước xong (để UI thấy từng tấm rơi xuống).
 
 **Cạm bẫy đã biết từ bản cũ:** bước sinh ảnh có thể trả nhiều hơn một ảnh, và nối ngữ cảnh từ một lượt-ảnh sang một lượt-JSON-schema sẽ bị lỗi. Xử lý ra sao → ghi vào `DECISIONS.md`.
+
+**Decision:** nhiều ảnh trong 1 lượt (DECISIONS ##15); bước nào nối ngữ cảnh từ đâu (##22); 1 ảnh lỗi giữa bước thì vẽ tiếp, retry chỉ vẽ ảnh thiếu (##23); địa chỉ ảnh + không kiểm tra user (##24)
 
 **DoD:** chạy hết 5 bước với fake client, `data/` có đúng số file mong đợi.
 

@@ -387,7 +387,80 @@ Cả hai đều thoả FR-23 **nếu** state được persist trước khi chạ
 **Xem lại khi** Có nhiều user thật chạy cùng lúc; thời gian chờ thành vấn đề --> chuyển sang B với N nhỏ
 
 ---
-## 22. placeholder
+## 22. Bước 3,4,5 nối ngữ cảnh từ đâu
+**Người đề xuất** PLAN.md + docs/02-pipeline.md
+**Bối cảnh** Sau bước 2 proj có 1 luồng text (textInteractionId), B3 và B5 sinh ảnh, B4 sinh JSON có schema. V1 từng lỗi khi nối JSON-schema --> nếu nối tuần tự như version cũ thì mỗi tương tự. ##13 chốt 2 pointer riêng nhưng chưa nêu rõ bước nào dùng pointer nào. Dùng ở 3 hàm bước 3-5 của PipelineService, chuỗi fixture của FakeGeminiClient, Phase 8 khu dựng lại ngữ cảnh hết hạn
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. 1 luồng: mỗi bước nối từ lượt gần nhất | 1 pointer --> dễ hiểu | B4(JSON) nối sau B3(hình)=cạm bẫy của bản cũ |
+| B. 2 luồng như notebook: text-text, hình-hình, giao nhau đúng 1 điểm | Tránh cạm bẫy; nhân vật nhất quán vì ảnh sau thấy ảnh trước; FakeGeminiClient + fixture đã dựng theo cách này | 2 pointer--> phải nhớ bước nào dùng trỏ nào |
+| C. Ảnh không nối ngữ cảnh, mỗi prompt chứa đủ style+mô tả | Không phụ thuộc interaction còn hạn, resume đơn giản | Mất tính nhất quán giữa portrait và illustration=mục đích của pipeline |
+**Chốt** B. 2 luồng như notebook
+    - B3, B5 (hình) nối từ ảnh thành công gần nhất (imageInteractionId); chưa có ảnh nào thì nối từ textInteractionId
+    - Điểm giao duy nhất=B2
+    - B4-Chapters (JSON) luôn nối từ textInteractionId
+    - B5 không đọc textInteractionId: prompt minh hoạc của chương đưa vào Gemini = text của prompt ảnh
+    - "Gemini trả nhiều hơn 1 ảnh" đã xử lý ở ##15
+**Trade-offs**
+    - 2 con trỏ thay vì 1; đổi lại không cạm bẫy ảnh-JSON và giữ được sự nhất quán
+    - Luồng ảnh rẽ nhánh từ lượt Characters nên không thấy lượt Chapters --> prompt ảnh B5 phải tự mang mô tả chương
+    - Thứ tự ảnh trong luồng có thể bị đảo khi retry --> chấp nhận
+    - Phụ thuộc interaction phía Gemini còn hạn; hết hạn phải dựng lại cả 2 luồng (Phase 8 solve later)
+**Xem lại khi** Retention của Gemini làm resume không dùng được --> cân nhắc C cho luồng ảnh
+
+---
+## 23. Ảnh lỗi giữa B3,5 thì làm gì
+**Người đề xuất** Tôi (Claude đề xuất dừng ngay khi lỗi ảnh đầu tiên, tôi chọn vẽ tiếp)
+**Bối cảnh** Bước ảnh gồm nhiều lời gọi Gemini, ảnh nào xong-->lưu ngay (FR-32) và retry không sinh lại ảnh đã có (FR-33, ##9). Còn phải quyết: 1 ảnh lỗi có thử lại các ảnh sau không, user được retry tới mức nào. Dùng ở loop B3 và B5, nghịa của failedStep với bước ảnh, nút retry ở Phase 9
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. Dừng ở ảnh lỗi đầu tiên | Vòng lặp đơn giản nhất | Các ảnh sau không được thử dù có thể thành công; user phải bấm lại và chờ thêm |
+| B. Bỏ qua ảnh lỗi + vẽ tiếp, thiếu ảnh thì bước thành failedStep; retry only draw ảnh thiếu | 1 lần bấm được nhiều ảnh nhất; UI chỉ ra đúng ảnh thiếu; không đổi schem; không thêm endpoint | Thêm try/catch trong loop; lastError gom nhiều ảnh; Gemini sập thì tốn thêm lời gọi |
+| C. B + endpoint retry từng ảnh + trạng thái lỗi per-item trong project.json | Retry và lỗi chính xác tới từng ảnh | Thêm state per-item mà ##9 đã loại; thêm kiểu claim cho 1 ảnh |
+**Chốt** B. Bỏ qua ảnh lỗi + vẽ tiếp...
+    - Ảnh xong: ghi file + thêm vào images[] + cập nhật imageInteractionId trong cùng 1 lần ghi có so vé (##19)
+    - Ảnh nối từ ảnh thành công gần nhất(imagInteractionId); chưa có ảnh thì nối từ textInteractionId (##22)
+    - Chỉ GeminiException của 1 ảnh mới được bỏ qua đi tiếp; lỗi khác như bug,disk thì hỏng như cũ
+    - Lần ghi sau 1 ảnh bị từ chối vì mất vé --> dừng loop ngay
+    - Hết loop: đủ ảnh --> done, thiếu ảnh --> failedStep=bước đó, lastError liệt kê ảnh thiếu + lý do
+    - Retry=gọi lại đúng endpoint run của bước đó; ảnh đã có trong images[] (cùng step + index) --> skip
+    - UI suy ra ảnh thiếu từ images[] + failedStep, không cần field mới
+**Trade-offs**
+    - Không violate FR-28: mỗi ảnh chỉ được gọi 1 lần mỗi lượt bấm
+    - Cap hiện tại: 2 chracters, 1 chapter --> B chỉ khác A khi portrait 1 lỗi và portrait 2 thành công, chi phí thêm khi Gemini sập max 1 lời gọi
+    - Thứ tự chuỗi ảnh có thể đảo khi retry --> chấp nhận, chuỗi vẫn liền
+    - Loại C vì ##9 đã từ chối cái giá
+**Xem lại khi**  Bỏ cap, mỗi bước có nhiều ảnh --> cần lỗi và retry riêng cho từng ảnh thì suy xét cách C
+
+---
+## 24. Ảnh được lấy từ địa chỉ nào, check user không
+**Người đề xuất** Claude
+**Bối cảnh** 2 vấn đề cùng lúc
+- Tìm file: C7 ghi GET /api/images/{id} nhưng data model phẳng (##2.1) và metadata ảnh nằm trong project.json --> chỉ có id ảnh thì server không biết ảnh thuộc project nào, phải quét mọi file project
+- Nhận diện user: mọi endpoint khác đòi header X-User-Email (##4) nhưng thẻ <img src> của trình duyệt không gửi được header tùy chỉnh. Dùng ở endpoint ảnh, URL ảnh trong response C4 (đang lộ Path ở disk), contract C7 và cách FE hiện ảnh ở Phase 9
+**Options**
+| Cách | Được | Mất |
+|---|---|---|
+| A. Giữ api/images/{id}, không check user, quét project để tìm | Không đổi contract C7 | Mỗi lần tải ảnh quét cả thư mục project; ai có URL là xem được |
+| B. /api/projects/{projectId}/images/{imageId} + không check user | Đọc đúng 1 file project; <img> dùng trực tiếp; 2 id đều là GUID không đoán được | Sửa C7; ai có URL là xem được lệch với luật "404 project của user khác |
+| C. Như B + check X-User-Email; FE tải ảnh=fetch kèm header rồi tạo object URL | Nhất quán mọi endpoint khác | FE phải tự quản vòng đời object URL (quên thu hồi=leak memory), mất cache ảnh trình duyệt; header có thể fake |
+**Chốt** B. /api/projects/{projectId}/images/{imageId}, không check user
+    - Server đọc project.json theo projectId, tìm ảnh có id=imageId trong images[], lấy link file từ JSON
+    - Không có project/ảnh/mất file --> 404
+    - resopnse C4 trả URL, không trả Path
+    - Chống path traversal: 2 tham số route ép kiểu GUID, không ghép chuỗi input=link
+    - Content-Type lấy từ mimeType trong metadata
+**Trade-offs**
+    - Ảnh là endpoint duy nhất không check user --> có URL là xem được --> chấp nhận vì URL chứa 2 GUID không đoán được + header X-User-Email bản chất không phải bảo mất thật
+    - Lệch contract C7 gốc --> sửa docs/03-design.md và mô tả images[] C4
+    - Loại A vì quét all project chỉ lấy ảnh, trong khi FE tải nhiều ảnh mỗi lần mở project
+    - Loại C vì phức tạp hóa Phase 9 chỉ đổi lấy sự nhất quán hình thức
+**Xem lại khi** Có auth thật (cookie/token trình duyệt gửi) --> thêm kiểm tra chủ project vào endpoint ảnh, <img> vẫn dùng được
+
+---
+## 25. placeholder
 **Người đề xuất**
 **Bối cảnh**
 **Options**
@@ -411,9 +484,5 @@ Cả hai đều thoả FR-23 **nếu** state được persist trước khi chạ
 **ghi nội dung trước, detail để sau**
 
 - [ ] Override #1: Decision 5 chọn BackgroundService thay vì Task.Run Claude đề xuất --> Chấp nhận viết thêm code để học cái chuẩn
-- [ ] Override #2: …
-- [ ] Override #3: …
+- [ ] Override #2: Decision 23 Claude đề xuất dừng ngay khi lỗi ảnh đầu tiên, tôi chọn vẽ tiếp
 
-## Chỗ Claude bắt lỗi tôi
-
-- [ ] …

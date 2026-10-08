@@ -159,6 +159,7 @@ Client           API            Channel    BackgroundService     Pipeline       
 Mô hình=Data model phẳng
 userKey= slug+Hash SHA-256 (8 ký tự đầu)
 --> project.json bắt buộc tự mang userEmail vì path không còn làm việc đó thay (xem B3)
+Ảnh: `data/images/{projectId}/{imageId}.<ext>` — tách theo projectId, tên file là id ảnh (GUID), không lấy từ input user
 Trade-offs ở `DECISIONS.md` ##2
 
 ## B3. Schema `project.json`
@@ -177,14 +178,14 @@ Trade-offs ở `DECISIONS.md` ##2
   "lastError": null,
 
   "bookUri": "…",
-  "textInteractionId": "…",
-  "imageInteractionId": "…",
+  "textInteractionId": "…", //lượt text gần nhất: B1, B2, B4 cập nhật (##22)
+  "imageInteractionId": "…", //ảnh thành công gần nhất: B3, B5 cập nhật (##22)
 
   "requestedStyle": null, //style user nhập ở B1, null=để AI tự chọn
   "style": "watercolour, soft edges, warm palette",
   "characters": [ { "name": "Mole", "imagePrompt": "…" } ],
   "chapters":   [ { "title": "…", "summary": "…", "imagePrompt": "…" } ],
-  "images":     [ { "id": "…", "step": 3, "index": 0, "path": "…", "mimeType": "image/jpeg", "createdAt": "…" } ]
+  "images":     [ { "id": "…", "step": 3, "index": 0, "path": "…", "mimeType": "image/jpeg", "createdAt": "…" } ] //path chỉ nằm trên disk, API không trả ra (C4)
 }
 ```
 
@@ -205,6 +206,20 @@ Trade-offs ở `DECISIONS.md` ##18
 - vé claim: lượt chạy giữ giá trị lúc claim, mọi lần ghi so vs giá trị trên disk, lệch --> k ghi (##19)
 - Chỉ claim được ghi field này; worker không được cập nhật lại
 - Không làm tròn: System.Text.Json giữ đủ 7 chữ số thập phân, so bằng mới đúng
+
+**Luồng ngữ cảnh — bước nào nối từ con trỏ nào (`DECISIONS.md` ##22):**
+- B3, B5 (ảnh): nối từ `imageInteractionId` (ảnh thành công gần nhất); chưa có ảnh nào thì nối từ `textInteractionId`
+- Điểm giao duy nhất của 2 luồng: ảnh đầu tiên của project nối từ lượt Characters (B2)
+- B4 Chapters (JSON): luôn nối từ `textInteractionId`, không bao giờ từ luồng ảnh (tránh cạm bẫy ảnh --> JSON-schema của bản cũ)
+- Mỗi lượt xong chỉ cập nhật con trỏ của đúng luồng đó; luồng kia giữ nguyên
+- B5 không đọc `textInteractionId`: mô tả chương đi vào Gemini bằng chính text của prompt ảnh
+
+**Bước ảnh (B3, B5) — lưu từng ảnh, lỗi giữa chừng (`DECISIONS.md` ##23):**
+- Mỗi ảnh xong: ghi file ảnh --> rồi 1 lần ghi JSON có so vé: thêm vào `images[]` + cập nhật `imageInteractionId` (FR-32)
+- 1 ảnh lỗi (GeminiException): bỏ qua, vẽ tiếp ảnh sau; lỗi khác (bug, disk) làm hỏng cả bước
+- Lần ghi sau 1 ảnh bị từ chối vì mất vé --> dừng vòng lặp ngay, không sinh thêm ảnh
+- Hết vòng lặp: đủ ảnh --> `completedSteps` tăng; còn thiếu --> `failedStep`=bước đó, `lastError` liệt kê ảnh thiếu + lý do
+- Ảnh thiếu được suy ra từ `images[]` (không có phần tử cùng `step` + `index`), không có field trạng thái per-item
 
 **Resume theo item (Portraits/Illustrations) — không đổi schema:**
 Khi retry step 3/5, `PipelineService` lọc `project.images.Where(i => i.step == step)` để biết những
@@ -236,7 +251,7 @@ Trade-offs ở `DECISIONS.md` ##6
 
 - [x] `ProjectStore` phải là **singleton** (hoặc dictionary `static`). Nếu scoped, mỗi request có dictionary riêng → lock vô dụng.
 - [x] Lưu ảnh: ghi **file ảnh trước**, cập nhật JSON sau. Ngược lại thì JSON trỏ tới file không tồn tại.
-- [x] `GET /api/images/{id}`: đường dẫn chỉ lấy từ JSON, **không** ghép từ input user.
+- [x] `GET /api/projects/{projectId}/images/{imageId}` (C7): đường dẫn chỉ lấy từ JSON, **không** ghép từ input user.
 - [x] `DateTime` luôn UTC, serialize ISO-8601 có `Z`--> múi giờ chuẩn để in case server Mỹ, React ở Nhật, BE Việt thì vẫn giống nhau
 - [x] `JsonSerializerOptions` phải `static readonly` — tạo mới mỗi lần gọi rất chậm.
 
@@ -286,6 +301,8 @@ Trả detail đầy đủ: cộng thêm `bookText`, `style`, `characters`, `chap
 
 - `404` nếu không tồn tại **hoặc** thuộc user khác. Dùng 404 thay 403 để không lộ việc project có tồn tại.
 - Endpoint này bị polling 2s → phải rẻ. Ảnh trả **URL**, tuyệt đối không nhúng base64.
+- Mỗi phần tử `images[]` trả: `id`, `step`, `index`, `url`, `mimeType`, `createdAt`. **Không** trả `path` (đường dẫn trên disk). `url` = `/api/projects/{projectId}/images/{imageId}` (C7)
+- FE biết ảnh nào còn thiếu ở B3/B5: nhân vật/chương thứ `i` không có phần tử `images[]` cùng `step` + `index` (`DECISIONS.md` ##23)
 
 ## C5. `POST /api/projects/{id}/steps/{step}/run`
 
@@ -308,6 +325,8 @@ Body (chỉ dùng ở bước 1): `{ "style": "…" }` — tuỳ chọn (FR-31).
 
 Hai mã `409` tương ứng 2 trạng thái từ chối của claim (`DECISIONS.md` ##20).
 
+**Retry bước ảnh (B3, B5)** (`DECISIONS.md` ##23): gọi lại đúng endpoint này cho bước đang `failedStep`. Ảnh đã có trong `images[]` bị bỏ qua, server chỉ gọi Gemini cho ảnh còn thiếu (FR-33). Không có endpoint retry riêng cho từng ảnh.
+
 Không trả kết quả — client polling `GET /api/projects/{id}`.
 
 ## C6. Bước treo (FR-27)
@@ -315,10 +334,14 @@ Không trả kết quả — client polling `GET /api/projects/{id}`.
 **DECISION:** ☐ endpoint riêng `POST .../steps/{step}/reset` ☐ `run` tự cướp quyền khi quá ngưỡng ☐ cả hai
 Ngưỡng bao nhiêu phút? ☐ … (ảnh mất 30s+, đừng đặt quá ngắn)
 
-## C7. `GET /api/images/{id}`
+## C7. `GET /api/projects/{projectId}/images/{imageId}`
 
-Trả file nhị phân kèm đúng `Content-Type`. `404` nếu không có id hoặc file mất.
-**Bắt buộc:** đường dẫn chỉ lấy từ metadata trong JSON.
+Trả file nhị phân kèm đúng `Content-Type` (lấy từ `mimeType` trong metadata).
+- Server đọc `project.json` theo `projectId`, tìm ảnh có `id` = `imageId` trong `images[]`, lấy đường dẫn file **từ JSON**
+- `404` nếu không có project, không có ảnh đó, hoặc file mất
+- **Không kiểm tra `X-User-Email`**: thẻ `<img src>` không gửi được header tuỳ chỉnh. Đây là endpoint duy nhất không kiểm tra user; chấp nhận vì URL chứa 2 GUID không đoán được (`DECISIONS.md` ##24)
+- Chống path traversal: 2 tham số route ép kiểu GUID, không ghép chuỗi input vào đường dẫn
+Trade-offs ở `DECISIONS.md` ##24
 
 ## C8. Định dạng lỗi
 1 dạng duy nhất rồi dùng nhất quán toàn API:
