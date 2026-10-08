@@ -60,5 +60,6 @@ app.MapGet("/api/health", () => Results.Ok(new
 
 app.MapAuthEndpoints();
 app.MapProjectEndpoints();
+app.MapPipelineEndpoints();
 
 app.Run();

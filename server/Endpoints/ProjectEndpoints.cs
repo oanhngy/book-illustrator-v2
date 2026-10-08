@@ -27,6 +27,7 @@ public record ProjectDetail (
     int? FailedStep,
     string Status,
     string BookText,
+    string? RequestedStyle, //style user nhập ở B1
     string? Style,
     List<Character> Characters,
     List<Chapter> Chapters,
@@ -134,6 +135,7 @@ public static class ProjectEndpoints
         p.FailedStep,
         ComputeStatus(p),
         bookText,
+        p.RequestedStyle,
         p.Style,
         p.Characters,
         p.Chapters,
