@@ -20,7 +20,7 @@ public class PipelineService
         }
         """).RootElement.Clone();
 
-    private const int MaxCharacters=2; //cap B2 Character
+    private const int MaxCharacters=2; //cap B2 Character, ép server
 
     //schema B2
     private static readonly JsonElement CharactersSchema=JsonDocument.Parse(
@@ -41,6 +41,32 @@ public class PipelineService
                 }
             },
             "required": ["characters"]
+        }
+        """).RootElement.Clone();
+    
+    //cap B4, max 1 chapter, ép ở server
+    private const int MaxChapters=1;
+
+    //schema B4: same B2
+    private static readonly JsonElement ChaptersSchema=JsonDocument.Parse(
+        """
+        {
+            "type": "object",
+            "properties": {
+                "chapters": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": { "type": "string" },
+                            "summary": { "type": "string" },
+                            "imagePrompt": { "type": "string" }
+                        },
+                        "required": ["title", "summary", "imagePrompt"]
+                    }
+                }
+            },
+            "required": ["chapters"]
         }
         """).RootElement.Clone();
 
@@ -110,6 +136,10 @@ public class PipelineService
                     break;
                 case 2: //character
                     await RunCharactersAsync(job);
+                    break;
+                case 3: //LATER
+                case 4: 
+                    await RunChaptersAsync(job);
                     break;
                 default: throw new InvalidOperationException($"Step {job.Step} is not implemented");
             }
@@ -198,6 +228,35 @@ public class PipelineService
             p.TextInteractionId=result.InteractionId;
         });
     }
+    
+    //B4-CHAPTERS
+    private async Task RunChaptersAsync(StepJob job)
+    {
+        var project=await LoadIfOwnerAsync(job);
+        if(project is null) return;
+
+        var previousId=project.TextInteractionId
+            ?? throw new InvalidOperationException($"Project {job.ProjectId} has no text interaction to continue");
+        
+        var result=await _gemini.GenerateJsonAsync(new GeminiJsonRequest
+        {
+            Model=_options.TextModel,
+            //prompt gốc từ notebook
+            Prompt="Now, for each chapters of the book, give me a prompt to illustrate what happens in it. It should be a single image, not a multi-tiled page. Be very descriptive, especially of the characters. Be very descriptive and remember to tell their name and to reuse the character prompts if they appear in the images. Also list all characters who appear in it. "
+                + $"Only cover the first {MaxChapters} chapter(s) of the book.",
+                PreviousInteractionId=previousId,
+                Schema=ChaptersSchema
+        });
+
+        //cap thật ở server
+        var chapters=ReadChapters(result.Data).Take(MaxChapters).ToList();
+
+        await CompleteAsync(job, p =>
+        {
+            p.Chapters=chapters;
+            p.TextInteractionId=result.InteractionId;
+        });
+    }
 
     //đọc snapshot ngoài lock + check vé sớm
     //phần đầu B1, B2
@@ -237,6 +296,35 @@ public class PipelineService
             throw new GeminiException("Gemini response does not contain any character");
         }
         return characters;
+    }
+    
+    //same as ReadCharacters, thiếu title/summary/imagePrompt --> bỏ qua, k có item --> throw
+    private static List<Chapter> ReadChapters(JsonElement data)
+    {
+        var chapters=new List<Chapter>();
+        if(data.ValueKind==JsonValueKind.Object && data.TryGetProperty("chapters", out var array) && array.ValueKind==JsonValueKind.Array)
+        {
+            foreach(var item in array.EnumerateArray())
+            {
+                var title=ReadString(item, "title");
+                var summary=ReadString(item, "summary");
+                var imagePrompt=ReadString(item, "imagePrompt");
+                if(title is not null && summary is not null && imagePrompt is not null)
+                {
+                    chapters.Add(new Chapter
+                    {
+                        Title=title,
+                        Summary=summary,
+                        ImagePrompt=imagePrompt
+                    });
+                }
+            }
+        }
+        if(chapters.Count==0)
+        {
+            throw new GeminiException("Gemini response does not contain any chapter");
+        }
+        return chapters;
     }
 
     //đọc gtri của property dạng string trong các obj , sai dạng/thiếu/rỗng --> null
