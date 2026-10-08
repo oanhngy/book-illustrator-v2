@@ -140,12 +140,12 @@ public class PipelineServiceRunCharactersTests : IDisposable
         var claimTwo=await pipeline.ClaimStepAsync(project.Id, 2, null);
         await pipeline.RunStepAsync(new StepJob(project.Id, 2, claimTwo.Ticket!.Value));
 
-        //Assert: cả 2 bước xong, k lỗi, có style + ít nhất 1 nhân vật và k quá cap
+        //Assert: cả 2 bước xong, k lỗi, có style + có đúng 2 nhân vật trong fixture
         var reloaded=await _store.GetAsync(project.Id);
         Assert.NotNull(reloaded);
         Assert.Null(reloaded.FailedStep);
         Assert.Equal(2, reloaded.CompletedSteps);
         Assert.False(string.IsNullOrWhiteSpace(reloaded.Style));
-        Assert.InRange(reloaded.Characters.Count, 1, 2);
+        Assert.Equal(["Mole", "Rat"], reloaded.Characters.Select(c => c.Name));
     }
 }
