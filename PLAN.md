@@ -187,11 +187,11 @@ p every write`
 **Cần học:** state machine; vì sao "check rồi mới write" là race condition nếu không có lock.
 
 **Việc cần làm:**
-- [ ] `PipelineService.RunStepAsync(projectId, step)`.
-- [ ] Bước 1 Style, bước 2 Characters (cap **2 nhân vật**, ép ở server).
-- [ ] Endpoint `POST /api/projects/{id}/steps/{step}/run` → trả `202 Accepted` ngay, chạy nền.
-- [ ] Claim bước: chỉ được chạy step N khi `completedSteps == N-1` và không có step nào đang chạy — kiểm tra **bên trong lock**.
-- [ ] Lỗi → lưu `lastError` + `failedStep`, project vẫn dùng được.
+- [x] `PipelineService.RunStepAsync(projectId, step)`.
+- [x] Bước 1 Style, bước 2 Characters (cap **2 nhân vật**, ép ở server).
+- [x] Endpoint `POST /api/projects/{id}/steps/{step}/run` → trả `202 Accepted` ngay, chạy nền.
+- [x] Claim bước: chỉ được chạy step N khi `completedSteps == N-1` và không có step nào đang chạy — kiểm tra **bên trong lock**.
+- [x] Lỗi → lưu `lastError` + `failedStep`, project vẫn dùng được.
 
 **DoD:** double-click nút Run chỉ tạo đúng **một** lời gọi Gemini. Chứng minh bằng test.
 
