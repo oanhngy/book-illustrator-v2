@@ -145,6 +145,9 @@ public class PipelineService
                 case 4:
                     await RunChaptersAsync(job);
                     break;
+                case 5:
+                    await RunIllustrationsAsync(job);
+                    break;
                 default: throw new InvalidOperationException($"Step {job.Step} is not implemented");
             }
         }
@@ -276,6 +279,23 @@ public class PipelineService
             $"Generate a portrait of the character \"{character.Name}\" to illustrate the book \"{project.Title}\". "
                 + $"The style we want you to follow is: {project.Style}. "
                 + $"Character description: {character.ImagePrompt}"
+        )).ToList();
+
+        await RunImageStepAsync(job, project, items);
+    }
+
+    //B5-ILLUSTRATION
+    private async Task RunIllustrationsAsync(StepJob job)
+    {
+        var project=await LoadIfOwnerAsync(job);
+        if(project is null) return;
+
+        //như B3, vị trí chương trong list=Index của hình
+        var items=project.Chapters.Select((chapter, index) => new ImageItem (
+            index,
+            chapter.Title,
+            "Starting from now, we're going to illustrate the book's chapters. Don't forget to refer to your previous illustrations of the characters to keep the characters consistency, but feel free to change their position. "
+                + $"Illustrate the chapter \"{chapter.Title}\": {chapter.ImagePrompt}"
         )).ToList();
 
         await RunImageStepAsync(job, project, items);
