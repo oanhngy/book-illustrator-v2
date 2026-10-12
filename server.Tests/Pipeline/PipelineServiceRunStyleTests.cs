@@ -21,7 +21,7 @@ public class PipelineServiceRunStyleTests : IDisposable
         _tempDir=Path.Combine(Path.GetTempPath(), $"book-illustrator-test-{Guid.NewGuid()}");
         _store=new ProjectStore(_tempDir);
         _gemini=new StubGeminiClient();
-        _pipeline=new PipelineService(_store, _gemini, Options.Create(new GeminiOptions()), NullLogger<PipelineService>.Instance);
+        _pipeline=new PipelineService(_store, new ImageStore(Path.Combine(_tempDir, "images")), _gemini, Options.Create(new GeminiOptions()), NullLogger<PipelineService>.Instance);
     }
 
     //chạy AFTER

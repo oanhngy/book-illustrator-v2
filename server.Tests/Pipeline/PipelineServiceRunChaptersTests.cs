@@ -32,7 +32,7 @@ public class PipelineServiceRunChaptersTests : IDisposable
     //helper: mỗi test tự chọn Gemini giả (stub hoặc fake)
     private PipelineService CreatePipeline(IGeminiClient gemini)
     {
-        return new PipelineService(_store, gemini, Options.Create(new GeminiOptions()), NullLogger<PipelineService>.Instance);
+        return new PipelineService(_store, new ImageStore(Path.Combine(_tempDir, "images")), gemini, Options.Create(new GeminiOptions()), NullLogger<PipelineService>.Instance);
     }
 
     //helper: project đã xong B1-B3 --> có CẢ 2 con trỏ (text dừng ở Characters, ảnh dừng ở portrait cuối)

@@ -31,5 +31,31 @@ public class StubGeminiClient : IGeminiClient
     }
 
     public Task<string> UploadBookAsync(string bookText) => throw new NotSupportedException();
-    public Task<GeminiImageResult> GenerateImageAsync(GeminiImageRequest request) => throw new NotSupportedException();
+    // server.Tests/Pipeline/StubGeminiClient.cs
+    //mọi request ẢNH đã nhận --> test đếm số lời gọi + soi PreviousInteractionId của từng lời gọi
+    public List<GeminiImageRequest> ImageRequests {get;}=[];
+
+    //test gán hàm này để quyết định trả gì/ném gì cho lượt ảnh
+    //mặc định: ảnh giả 3 byte, id tăng dần stub-image-1, stub-image-2... (theo số lời gọi đã nhận)
+    public Func<GeminiImageRequest, Task<GeminiImageResult>> OnImage {get; set;}
+
+    public StubGeminiClient()
+    {
+        OnImage=_ => Task.FromResult(ImageResult($"stub-image-{ImageRequests.Count}"));
+    }
+
+    //helper dựng GeminiImageResult giả
+    public static GeminiImageResult ImageResult(string interactionId) => new()
+    {
+        InteractionId=interactionId,
+        ImageBytes=[1, 2, 3],
+        MimeType="image/jpeg"
+    };
+
+    public Task<GeminiImageResult> GenerateImageAsync(GeminiImageRequest request)
+    {
+        ImageRequests.Add(request);
+        return OnImage(request);
+    }
+
 }

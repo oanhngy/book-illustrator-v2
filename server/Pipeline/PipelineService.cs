@@ -71,13 +71,15 @@ public class PipelineService
         """).RootElement.Clone();
 
     private readonly ProjectStore _store;
+    private readonly ImageStore _images;
     private readonly IGeminiClient _gemini; //đổi fake/real mà pipeline k biết
     private readonly GeminiOptions _options;
     private readonly ILogger<PipelineService> _logger;
     
-    public PipelineService(ProjectStore store, IGeminiClient gemini, IOptions<GeminiOptions> options, ILogger<PipelineService> logger)
+    public PipelineService(ProjectStore store, ImageStore images, IGeminiClient gemini, IOptions<GeminiOptions> options, ILogger<PipelineService> logger)
     {
         _store=store;
+        _images=images;
         _gemini=gemini;
         _options=options.Value;
         _logger=logger;
@@ -131,14 +133,16 @@ public class PipelineService
             //dispatch=switch+private method
             switch(job.Step)
             {
-                case 1: //style
+                case 1:
                     await RunStyleAsync(job);
                     break;
-                case 2: //character
+                case 2:
                     await RunCharactersAsync(job);
                     break;
-                case 3: //LATER
-                case 4: 
+                case 3:
+                    await RunPortraitsAsync(job);
+                    break;
+                case 4:
                     await RunChaptersAsync(job);
                     break;
                 default: throw new InvalidOperationException($"Step {job.Step} is not implemented");
@@ -256,6 +260,94 @@ public class PipelineService
             p.Chapters=chapters;
             p.TextInteractionId=result.InteractionId;
         });
+    }
+
+    //B3-PORTRAITS
+    //cb list hình cần có; vòng lặp sinh ở RunImagesStepAsync(B5 xài chung)
+    private async Task RunPortraitsAsync(StepJob job)
+    {
+        var project=await LoadIfOwnerAsync(job);
+        if(project is null) return;
+
+        //Select có index: vị trí character trong list=index ảnh --> biết hình nào của character nào (##9)
+        var items=project.Characters.Select((character, index) => new ImageItem (
+            index,
+            character.Name,
+            $"Generate a portrait of the character \"{character.Name}\" to illustrate the book \"{project.Title}\". "
+                + $"The style we want you to follow is: {project.Style}. "
+                + $"Character description: {character.ImagePrompt}"
+        )).ToList();
+
+        await RunImageStepAsync(job, project, items);
+    }
+
+    private record ImageItem(int Index, string Label, string Prompt);
+
+    //xài chung B3, B5: sinh từng hình, save-as-go, skip hình lỗi, resume được (##22,23)
+    private async Task RunImageStepAsync(StepJob job, Project project, List<ImageItem> items)
+    {
+        //resume: có ảnh r k sinh lại
+        var done=project.Images.Where(i => i.Step==job.Step).Select(i => i.Index).ToHashSet();
+
+        //##22 nối từ ảnh thành công gần nhất, chưa có hình thì nối từ text
+        var previousId=project.ImageInteractionId ?? project.TextInteractionId ?? throw new InvalidOperationException($"Project {job.ProjectId} has no interaction to continue");
+
+        //lỗi của từng ảnh gom lại, hết lopp báo 1 lần
+        var failures=new List<string>();
+
+        foreach(var item in items)
+        {
+            if(done.Contains(item.Index)) continue; //có rồi --> skip
+
+            GeminiImageResult result;
+            try
+            {
+                result=await _gemini.GenerateImageAsync(new GeminiImageRequest
+                {
+                    Model=_options.ImageModel,
+                    Prompt=item.Prompt,
+                    PreviousInteractionId=previousId
+                });
+            }
+
+            //chỉ bắt GeminiException của 1 ảnh: ghi nhận + đi tiếp; k auto-retry; lỗi khác lên catch rộng của RunStepAsync
+            catch (GeminiException ex)
+            {
+                failures.Add($"{item.Label}: {ex.Message}");
+                continue;
+            }
+
+            //B7: ghi file 1st, json after --> kbh trỏ tới file k tồn tại
+            var imageId=Guid.NewGuid().ToString();
+            var path=await _images.SaveAsync(job.ProjectId, imageId, result.ImageBytes, result.MimeType);
+
+            //save-as-go: mỗi hình 1 lần ghi có so vé, metadta+pointer đi chung 1 lần ghi
+            var written=await WriteIfOwnerAsync(job, p =>
+            {
+                p.Images.Add(new ImageRef
+                {
+                    Id=imageId,
+                    Step=job.Step,
+                    Index=item.Index,
+                    Path=path,
+                    MimeType=result.MimeType,
+                    CreatedAt=DateTime.UtcNow
+                });
+                p.ImageInteractionId=result.InteractionId;
+            });
+
+            //##19 mất vé --> stop liền
+            if(!written) return;
+
+            previousId=result.InteractionId;
+        }
+        //thiếu hình=lỗi --> throw để FailAsync ghi mess cho user
+        //retry thì only hình thiếu sinh lại
+        if(failures.Count>0)
+        {
+            throw new GeminiException($"{failures.Count} of {items.Count} images failed. {string.Join("; ", failures)}");
+        }
+        await CompleteAsync(job, _ => {});
     }
 
     //đọc snapshot ngoài lock + check vé sớm

@@ -28,6 +28,7 @@ public class PipelineWorkerTests : IDisposable
         services.AddLogging(); //cho ILogger<PipelineService>
         services.AddOptions<GeminiOptions>(); //cho IOptions<GeminiOptions>
         services.AddSingleton(_store);
+        services.AddSingleton(new ImageStore(Path.Combine(_tempDir, "images")));
         services.AddSingleton<IGeminiClient>(_gemini);
         services.AddScoped<PipelineService>(); //cùng lifetime với Program.cs
         _provider=services.BuildServiceProvider();

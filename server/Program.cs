@@ -43,6 +43,7 @@ else
 
 builder.Services.AddSingleton<UserStore>(); //AuthEndpoints
 builder.Services.AddSingleton<ProjectStore>(); //ProjectEndpoints
+builder.Services.AddSingleton<ImageStore>(); //file hình: data/images/{projectId}
 builder.Services.AddSingleton(Channel.CreateUnbounded<StepJob>(new UnboundedChannelOptions {SingleReader=true}));
 builder.Services.AddScoped<PipelineService>();
 builder.Services.AddHostedService<PipelineWorker>();

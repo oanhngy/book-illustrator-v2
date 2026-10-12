@@ -34,6 +34,7 @@ public class PipelineEndpointsTests : IDisposable
         services.AddLogging();
         services.AddOptions<GeminiOptions>();
         services.AddSingleton(_store);
+        services.AddSingleton(new ImageStore(Path.Combine(_tempDir, "images")));
         services.AddSingleton<IGeminiClient>(_gemini);
         services.AddScoped<PipelineService>();
         _provider=services.BuildServiceProvider();
