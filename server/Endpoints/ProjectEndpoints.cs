@@ -17,6 +17,15 @@ public record ProjectSummary (
     string Status
 );
 
+public record ProjectImage(
+    string Id,
+    int Step,
+    int Index,
+    String Url,
+    String MimeType,
+    DateTime CreatedAt
+);
+
 //DTO GET /api/projects/{id} (C4) đầy đủ + bookText/style/characters/chapters/images
 public record ProjectDetail (
     Guid Id,
@@ -31,7 +40,7 @@ public record ProjectDetail (
     string? Style,
     List<Character> Characters,
     List<Chapter> Chapters,
-    List <ImageRef> Images,
+    List <ProjectImage> Images,
     string? LastError,
     bool CanForceRetry
 );
@@ -126,7 +135,7 @@ public static class ProjectEndpoints
         ComputeStatus(p)
     );
 
-    private static ProjectDetail ToDetail(Project p, string bookText) => new (
+    public static ProjectDetail ToDetail(Project p, string bookText) => new (
         p.Id,
         p.Title,
         p.CreatedAt,
@@ -139,7 +148,14 @@ public static class ProjectEndpoints
         p.Style,
         p.Characters,
         p.Chapters,
-        p.Images,
+        p.Images.Select( i => new ProjectImage(
+            i.Id,
+            i.Step,
+            i.Index,
+            $"/api/projects/{p.Id}/images/{i.Id}",
+            i.MimeType,
+            i.CreatedAt
+        )).ToList(),
         p.LastError,
         CanForceRetry:false
     );
