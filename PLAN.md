@@ -204,10 +204,10 @@ p every write`
 **Cần học:** lưu và phục vụ file nhị phân; base64; `Results.File`.
 
 **Việc cần làm:**
-- [ ] Bước 3 Portraits, bước 4 Chapters (cap **1 chương**), bước 5 Illustrations.
-- [ ] Lưu ảnh vào `data/images/{projectId}/`, metadata vào JSON.
-- [ ] `GET /api/projects/{projectId}/images/{imageId}` phục vụ ảnh — **chống path traversal** (route đổi theo DECISIONS ##24).
-- [ ] Lưu ảnh **ngay sau mỗi tấm**, không đợi cả bước xong (để UI thấy từng tấm rơi xuống).
+- [x] Bước 3 Portraits, bước 4 Chapters (cap **1 chương**), bước 5 Illustrations.
+- [x] Lưu ảnh vào `data/images/{projectId}/`, metadata vào JSON.
+- [x] `GET /api/projects/{projectId}/images/{imageId}` phục vụ ảnh — **chống path traversal** (route đổi theo DECISIONS ##24).
+- [x] Lưu ảnh **ngay sau mỗi tấm**, không đợi cả bước xong (để UI thấy từng tấm rơi xuống).
 
 **Cạm bẫy đã biết từ bản cũ:** bước sinh ảnh có thể trả nhiều hơn một ảnh, và nối ngữ cảnh từ một lượt-ảnh sang một lượt-JSON-schema sẽ bị lỗi. Xử lý ra sao → ghi vào `DECISIONS.md`.
 
